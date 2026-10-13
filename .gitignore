@@ -41,3 +41,15 @@ example
 # generated native folders
 /ios
 /android
+
+# Build artifacts & binaries
+*.apk
+*.aab
+*.idsig
+
+# Tooling and scratch files
+.agents/
+.claude/
+skills-lock.json
+generated_images/
+
