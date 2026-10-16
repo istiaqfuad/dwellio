@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "731621183831",
+    "project_id": "dewllio-6290e",
+    "storage_bucket": "dewllio-6290e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:731621183831:android:9da8c466e1d3cae286ae12",
+        "android_client_info": {
+          "package_name": "com.dwellio.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "731621183831-lmn13qchtf22vrblrokt2iocq2duu6d5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBByuvXfprrCsDYTvqg0i5CdOZy0_d9ImE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "731621183831-lmn13qchtf22vrblrokt2iocq2duu6d5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
