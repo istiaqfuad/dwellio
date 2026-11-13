@@ -1,56 +1,77 @@
-# Welcome to your Expo app 👋
+# Dwellio
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Shared household app: meals with announce-by times and adjustable weights, a single shared grocery list, expense splitting with receiver-confirmed settlements, tasks, polls, bills, announcements, a calendar, activity history, and reports. Built with Expo and backed by Firebase Authentication and Firestore.
+
+## Requirements
+
+- Node 20+
+- An Expo account with the `dewllio-6290e` Firebase project linked
+- For production builds: an Expo access token and an Android signing key (see Releasing)
 
 ## Get started
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
 ```bash
-npm run reset-project
+npm install
+cp .env.example .env.local   # then fill in the values
+npx expo start
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+Open the project with [Expo Go](https://expo.dev/go) to try it, or build a development client for native modules.
 
-### Other setup steps
+## Useful commands
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+```bash
+npx expo start        # dev server
+npx expo lint         # lint
+npx tsc --noEmit      # typecheck
+npx expo export --platform web   # static web export
+```
 
-## Learn more
+Before finishing any change, lint and typecheck should both pass.
 
-To learn more about developing your project with Expo, look at the following resources:
+## Configuration
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Copy `.env.example` to `.env.local` and fill it from the Firebase console
+(Project settings > General > Your apps > SDK setup and configuration):
 
-## Join the community
+- `EXPO_PUBLIC_FIREBASE_*` — web app config for `dewllio-6290e`
+- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` — OAuth web client, used for native Google sign-in
+- `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` — Android OAuth client id
 
-Join our community of developers creating universal apps.
+Expo reads `EXPO_PUBLIC_*` variables at startup, so restart the dev server
+after changing `.env.local`.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Android native builds use the `com.dwellio.app` package. The SHA-1 of the
+signing key must be registered on the Firebase Android app or Google sign-in
+fails with a developer error.
+
+## Project layout
+
+- `src/app/` — Expo Router screens. Every file is a route; `(tabs)/` holds the main tabs.
+- `src/components/` — shared UI (`ui.tsx`, bottom tab bar).
+- `src/lib/` — Firebase setup, auth and household contexts, finance math, invite links.
+- `firestore.rules`, `firestore.indexes.json`, `firebase.json` — backend config, deployed with `npx -y firebase-tools@latest deploy`.
+- `.github/workflows/release.yml` — tag-driven production release.
+
+## Releasing
+
+Push a tag like `v1.2.3` and the release workflow runs: typecheck, lint,
+production EAS build, AAB download, conversion to a signed universal APK,
+and a GitHub release holding both files.
+
+Required repository secrets:
+
+| Secret | Purpose |
+|---|---|
+| `EXPO_TOKEN` | Expo access token for the EAS build |
+| `ANDROID_KEYSTORE_BASE64` | base64 of the release keystore (`base64 -w0 <keystore>`) |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore password |
+| `ANDROID_KEY_ALIAS` | key alias |
+| `ANDROID_KEY_PASSWORD` | key password |
+
+Use the same keystore as local builds so the APK installs as an update.
+The APK is signed with your key for direct installs; use the attached AAB
+for Play Store releases, which carry the EAS upload key.
+
+Note: EAS cloud builds count against your Expo plan, so prefer one build per
+release and use Expo Updates for JavaScript-only changes where possible.
