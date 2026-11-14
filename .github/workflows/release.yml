@@ -50,6 +50,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - run: npm ci
 
       - name: Sync app version from tag
         run: |
