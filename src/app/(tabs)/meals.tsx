@@ -67,6 +67,17 @@ interface MealAdjustment {
   delta: number;
 }
 
+interface FlagDoc {
+  id: string;
+  total?: number;
+}
+
+function fmtU(v: number): string {
+  if (!Number.isFinite(v)) return '0';
+  const r = Math.round(v * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+}
+
 function monthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
@@ -83,6 +94,7 @@ export default function MealsScreen() {
   const { items: guests } = useCollection<GuestReg>(`households/${hid}/guests`, [], !!hid);
   const { items: purchases } = useCollection<PurchaseDoc>(`households/${hid}/purchases`, [], !!hid);
   const { items: adjustments } = useCollection<MealAdjustment>(`households/${hid}/mealAdjustments`, [], !!hid);
+  const { items: flags } = useCollection<FlagDoc>(`households/${hid}/flags`, [], !!hid);
   const { items: groceryExpenses } = useCollection<Expense>(`households/${hid}/expenses`, [], !!hid);
 
   const [guestMeal, setGuestMeal] = useState('');
@@ -123,6 +135,7 @@ export default function MealsScreen() {
   const [adjMember, setAdjMember] = useState('');
   const [adjMeal, setAdjMeal] = useState('');
   const [adjDelta, setAdjDelta] = useState('');
+  const [adjTotal, setAdjTotal] = useState('');
   const [adjError, setAdjError] = useState('');
   const kitchenClosed = skippedDays.some((s) => s.id === KITCHEN_CLOSED);
   const [busy, setBusy] = useState<string | null>(null);
@@ -232,6 +245,40 @@ export default function MealsScreen() {
 
   async function removeAdjustment(id: string) {
     await deleteDoc(doc(db, 'households', hid, 'mealAdjustments', id));
+  }
+
+  async function saveMonthTotal() {
+    if (!user || !active) return;
+    const month = monthKey(new Date());
+    const counted = allocation?.countedTotal ?? null;
+    if (counted === null) {
+      setAdjError('Counts are still loading. Try again in a moment.');
+      return;
+    }
+    const entered = parseInt(adjTotal, 10);
+    if (Number.isNaN(entered) || entered < 0) {
+      setAdjError('Enter a whole number, 0 or more, for the month total.');
+      return;
+    }
+    setAdjError('');
+    if (entered === Math.round(counted)) {
+      await deleteDoc(doc(db, 'households', hid, 'flags', `meal-total-${month}`));
+      await logActivity('meal', 'Cleared the month total override');
+    } else {
+      await setDoc(doc(db, 'households', hid, 'flags', `meal-total-${month}`), {
+        total: entered,
+        updatedAt: serverTimestamp(),
+      });
+      await logActivity('meal', `Set this month's total meal count to ${entered}`);
+    }
+    setAdjTotal('');
+  }
+
+  async function clearMonthTotal() {
+    if (!active) return;
+    await deleteDoc(doc(db, 'households', hid, 'flags', `meal-total-${monthKey(new Date())}`));
+    await logActivity('meal', 'Cleared the month total override');
+    setAdjTotal('');
   }
 
   async function resetWeights() {
@@ -491,14 +538,28 @@ export default function MealsScreen() {
       }
       return { uid, units };
     });
+    const activeMeals = mealTypes.filter((t) => t.active);
+    const countedTotal = counts.reduce((s, c) => s + Object.values(c.units).reduce((a, b) => a + b, 0), 0);
+    const overrideDoc = flags.find((f) => f.id === `meal-total-${month}`);
+    const overrideTotal =
+      typeof overrideDoc?.total === 'number' && Number.isFinite(overrideDoc.total) ? overrideDoc.total : null;
+    let units = counts;
+    if (overrideTotal !== null && counts.length > 0 && activeMeals.length > 0) {
+      const extra = (overrideTotal - countedTotal) / counts.length / activeMeals.length;
+      units = counts.map((c) => {
+        const u: Record<string, number> = {};
+        for (const m of activeMeals) u[m.id] = Math.max(0, (c.units[m.id] ?? 0) + extra);
+        return { uid: c.uid, units: u };
+      });
+    }
     const guestShares: GuestShare[] = guests
       .filter((g) => inPeriod(g.day) && !isSkipped(g.mealTypeId, g.day) && dayNum(g.day) < dayNum(today))
       .map((g) => ({ mealId: g.mealTypeId, count: g.count, uids: guestUids(g) }));
-    const split = allocateFoodCost(foodTotal, mealTypes, counts, guestShares);
-    const totalUnits = counts.reduce((s, c) => s + Object.values(c.units).reduce((a, b) => a + b, 0), 0);
-    return { monthLabel, foodTotal, perMember: split.perMember, units: counts, totalUnits };
+    const split = allocateFoodCost(foodTotal, mealTypes, units, guestShares);
+    const totalUnits = units.reduce((s, c) => s + Object.values(c.units).reduce((a, b) => a + b, 0), 0);
+    return { monthLabel, foodTotal, perMember: split.perMember, units, totalUnits, countedTotal, overrideTotal };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [purchases, groceryExpenses, mealTypes, optOuts, guests, active, adjustments]);
+  }, [purchases, groceryExpenses, mealTypes, optOuts, guests, active, adjustments, flags]);
 
   function guestUids(g: GuestReg): string[] {
     if (g.sharedWith && g.sharedWith.length > 0) return g.sharedWith;
@@ -514,6 +575,9 @@ export default function MealsScreen() {
       </Screen>
     );
   }
+
+  const countedTotal = allocation?.countedTotal ?? 0;
+  const overrideTotal = allocation?.overrideTotal ?? null;
 
   return (
     <Screen style={{ padding: 0 }}>
@@ -700,7 +764,7 @@ export default function MealsScreen() {
             <Card>
               <Text style={{ color: p.ink }}>Grocery spending: {formatMoney(allocation.foodTotal, active.currency)}</Text>
               <Text style={{ fontSize: 13, color: p.muted, marginBottom: 6 }}>
-                {allocation.totalUnits} meals this month
+                {fmtU(allocation.totalUnits)} meals this month{allocation.overrideTotal !== null ? ' (adjusted)' : ''}
               </Text>
               {Object.entries(allocation.perMember).map(([uid, amt]) => {
                 const u = allocation.units.find((c) => c.uid === uid)?.units ?? {};
@@ -714,9 +778,9 @@ export default function MealsScreen() {
                     <Text style={{ fontSize: 13, color: p.muted }}>
                       {mealTypes
                         .filter((m) => m.active)
-                        .map((m) => `${m.name} ${u[m.id] ?? 0}`)
+                        .map((m) => `${m.name} ${fmtU(u[m.id] ?? 0)}`)
                         .join(' · ')}
-                      {' · '}Total {ownTotal}
+                      {' · '}Total {fmtU(ownTotal)}
                     </Text>
                   </View>
                 );
@@ -773,6 +837,34 @@ export default function MealsScreen() {
               />
               {adjError ? <Text style={{ color: p.danger, fontSize: 13, marginBottom: 8 }}>{adjError}</Text> : null}
               <Button label="Save adjustment" onPress={() => run('save-adjust', saveAdjustment)} loading={busy === 'save-adjust'} />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: p.muted, marginTop: 14, marginBottom: 6 }}>Month total</Text>
+              <Text style={{ fontSize: 13, color: p.muted, marginBottom: 6 }}>
+                Counted so far: {fmtU(countedTotal)}
+                {overrideTotal !== null ? ` · Override: ${overrideTotal}` : ''}
+              </Text>
+              <Text style={{ fontSize: 13, color: p.muted, marginBottom: 6 }}>
+                Set the whole month total directly. The difference from the counted total is shared equally across members.
+              </Text>
+              <Field
+                label="Total meals this month"
+                value={adjTotal}
+                onChangeText={(v) => {
+                  setAdjError('');
+                  setAdjTotal(v);
+                }}
+                keyboardType="numbers-and-punctuation"
+                placeholder={String(Math.round(countedTotal))}
+              />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Button label="Save month total" onPress={() => run('save-total', saveMonthTotal)} loading={busy === 'save-total'} />
+                </View>
+                {overrideTotal !== null ? (
+                  <View style={{ flex: 1 }}>
+                    <Button label="Use counted total" variant="ghost" onPress={() => run('clear-total', clearMonthTotal)} loading={busy === 'clear-total'} />
+                  </View>
+                ) : null}
+              </View>
               {(() => {
                 const mine = adjustments.filter((a) => a.month === monthKey(new Date()));
                 if (mine.length === 0) return null;
