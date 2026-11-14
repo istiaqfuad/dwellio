@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { KeyboardAvoidingView, Platform, useColorScheme } from 'react-native';
@@ -5,6 +6,7 @@ import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -182,6 +184,44 @@ export function Button({
     <Pressable style={[styles.base, { backgroundColor: p.primary }]} onPress={onPress} disabled={inactive}>
       {content}
     </Pressable>
+  );
+}
+
+export function Toggle({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
+}) {
+  const p = usePalette();
+  // Flip instantly on tap; the server value arrives a moment later and takes over.
+  const [optimistic, setOptimistic] = useState<boolean | null>(null);
+  useEffect(() => {
+    setOptimistic(null);
+  }, [value]);
+  useEffect(() => {
+    if (optimistic === null) return;
+    const t = setTimeout(() => setOptimistic(null), 4000);
+    return () => clearTimeout(t);
+  }, [optimistic]);
+  const shown = optimistic ?? value;
+  return (
+    <Switch
+      value={shown}
+      onValueChange={(next) => {
+        if (disabled) return;
+        setOptimistic(next);
+        onChange(next);
+      }}
+      disabled={disabled}
+      trackColor={{ false: p.line, true: p.primary }}
+      thumbColor={shown ? p.primaryInk : p.muted}
+      ios_backgroundColor={p.line}
+      style={{ opacity: disabled ? 0.5 : 1 }}
+    />
   );
 }
 
