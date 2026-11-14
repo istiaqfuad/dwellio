@@ -719,7 +719,7 @@ export default function MealsScreen() {
 
         {todayGuests.length > 0 && (
           <>
-            <SectionTitle>Today's guests</SectionTitle>
+            <SectionTitle>Today&apos;s guests</SectionTitle>
             {guestListError ? <Text style={{ color: p.danger, fontSize: 13, marginBottom: 8 }}>{guestListError}</Text> : null}
             {todayGuests.map((g) => (
               <Card key={g.id}>

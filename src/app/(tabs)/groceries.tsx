@@ -51,6 +51,20 @@ export default function GroceriesScreen() {
   }
 
   const ensuredRef = useRef('');
+  const shared = lists.find((l) => l.kind === 'shared');
+
+  async function ensureShared() {
+    if (shared || !user) return shared?.id ?? '';
+    const ref = await addDoc(collection(db, 'households', hid, 'lists'), {
+      name: 'Shared list',
+      kind: 'shared',
+      locked: false,
+      finalized: false,
+      createdAt: serverTimestamp(),
+    });
+    return ref.id;
+  }
+
   useEffect(() => {
     if (!hid || !user || listsLoading) return;
     if (ensuredRef.current === hid) return;
@@ -62,7 +76,6 @@ export default function GroceriesScreen() {
   }, [hid, user, listsLoading]);
 
   const nameOf = (uid: string) => members.find((m) => m.id === uid)?.displayName ?? 'Member';
-  const shared = lists.find((l) => l.kind === 'shared');
   const openList = shared?.id ?? '';
 
   const { items: openItems } = useCollection<GroceryItem>(
@@ -79,18 +92,6 @@ export default function GroceriesScreen() {
         <Subtitle>Join or create a household first.</Subtitle>
       </Screen>
     );
-  }
-
-  async function ensureShared() {
-    if (shared || !user) return shared?.id ?? '';
-    const ref = await addDoc(collection(db, 'households', hid, 'lists'), {
-      name: 'Shared list',
-      kind: 'shared',
-      locked: false,
-      finalized: false,
-      createdAt: serverTimestamp(),
-    });
-    return ref.id;
   }
 
   async function addItem() {
