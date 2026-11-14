@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { addDoc, collection, deleteDoc, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { BackButton, Button, Card, EmptyState, Field, ListRow, Row, Screen, SectionTitle, Subtitle, Title, Toggle, usePalette } from '@/components/ui';
+import { BackButton, Button, Card, EmptyState, Field, ListRow, Row, Screen, SectionTitle, Subtitle, Title, usePalette } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
 import { useHousehold } from '@/lib/household-context';
 import { useCollection } from '@/lib/use-collection';
-import { allocateFoodCost, dayKey, formatMoney, scaledShares, type GuestShare } from '@/lib/finance';
+import { allocateFoodCost, dayKey, equalShares, formatMoney, scaledShares, type GuestShare } from '@/lib/finance';
 import { db } from '@/lib/firebase';
 import type { Expense } from '@/lib/models';
 
@@ -98,6 +98,8 @@ export default function MealsScreen() {
   const { items: groceryExpenses } = useCollection<Expense>(`households/${hid}/expenses`, [], !!hid);
 
   const [guestMeal, setGuestMeal] = useState('');
+  const [guestAll, setGuestAll] = useState(false);
+  const [guestNote, setGuestNote] = useState('');
   const [guestCount, setGuestCount] = useState('1');
   const [guestNames, setGuestNames] = useState('');
   const [splitWith, setSplitWith] = useState<string[]>([]);
@@ -284,7 +286,7 @@ export default function MealsScreen() {
   async function resetWeights() {
     const visible = mealTypes.filter((m) => m.active);
     if (visible.length === 0) return;
-    const shares = scaledShares(visible, 100);
+    const shares = equalShares(100, visible.map((m) => m.id));
     await Promise.all(
       Object.entries(shares).map(([id, weight]) => updateDoc(doc(db, 'households', hid, 'mealTypes', id), { weight })),
     );
@@ -409,9 +411,20 @@ export default function MealsScreen() {
     await logActivity('meal', `${user.displayName ?? 'Someone'} updated meal participation for today`);
   }
 
+  function pastCutoff(meal: MealTypeDoc): boolean {
+    if (!validTime(meal.deadline)) return false;
+    const [hh, mm] = meal.deadline.split(':').map((x) => Number(x));
+    const nowD = new Date();
+    const cutoff = new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate(), hh ?? 0, mm ?? 0);
+    return Date.now() > cutoff.getTime();
+  }
+
   async function addGuests() {
     if (!user) return;
-    if (!guestMeal) {
+    const targets = guestAll
+      ? mealTypes.filter((m) => m.active)
+      : mealTypes.filter((m) => m.active && m.id === guestMeal);
+    if (targets.length === 0) {
       setGuestError('Pick which meal the guests are joining.');
       return;
     }
@@ -420,32 +433,36 @@ export default function MealsScreen() {
       setGuestError('Enter how many guests are coming.');
       return;
     }
-    const meal = mealTypes.find((m) => m.id === guestMeal);
-    if (meal && validTime(meal.deadline)) {
-      const [hh, mm] = meal.deadline.split(':').map((x) => Number(x));
-      const nowD = new Date();
-      const cutoff = new Date(nowD.getFullYear(), nowD.getMonth(), nowD.getDate(), hh ?? 0, mm ?? 0);
-      if (Date.now() > cutoff.getTime()) {
-        setGuestError(`Announce time is over for ${meal.name} today.`);
-        return;
-      }
+    const open = targets.filter((m) => !pastCutoff(m));
+    const skipped = targets.filter((m) => pastCutoff(m));
+    if (open.length === 0) {
+      setGuestError(`Announce time is over for ${targets.map((m) => m.name).join(', ')} today.`);
+      return;
     }
     const sharers = splitWith.length > 0 ? splitWith : [user.uid];
     setGuestError('');
-    await addDoc(collection(db, 'households', hid, 'guests'), {
-      uid: user.uid,
-      day: today,
-      mealTypeId: guestMeal,
-      count,
-      names: guestNames.trim(),
-      sharedWith: sharers,
-      createdAt: serverTimestamp(),
-    });
-    await logActivity('meal', `${user.displayName ?? 'Someone'} registered ${count} guest(s) for today`);
+    await Promise.all(
+      open.map((meal) =>
+        addDoc(collection(db, 'households', hid, 'guests'), {
+          uid: user.uid,
+          day: today,
+          mealTypeId: meal.id,
+          count,
+          names: guestNames.trim(),
+          sharedWith: sharers,
+          createdAt: serverTimestamp(),
+        }),
+      ),
+    );
+    await logActivity('meal', `${user.displayName ?? 'Someone'} registered ${count} guest(s) for ${open.map((m) => m.name).join(', ')} today`);
     setGuestMeal('');
+    setGuestAll(false);
     setGuestCount('1');
     setGuestNames('');
     setSplitWith([]);
+    setGuestNote(
+      skipped.length > 0 ? `Announce time was over for ${skipped.map((m) => m.name).join(', ')}, registered for the rest.` : '',
+    );
   }
 
   async function addMealType() {
@@ -557,7 +574,14 @@ export default function MealsScreen() {
       .map((g) => ({ mealId: g.mealTypeId, count: g.count, uids: guestUids(g) }));
     const split = allocateFoodCost(foodTotal, mealTypes, units, guestShares);
     const totalUnits = units.reduce((s, c) => s + Object.values(c.units).reduce((a, b) => a + b, 0), 0);
-    return { monthLabel, foodTotal, perMember: split.perMember, units, totalUnits, countedTotal, overrideTotal };
+    const dayMs = 86400000;
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+    const startMidnight = new Date(start);
+    startMidnight.setHours(0, 0, 0, 0);
+    const daysElapsed = Math.max(0, Math.round((todayMidnight.getTime() - startMidnight.getTime()) / dayMs));
+    const perDayCost = daysElapsed > 0 ? foodTotal / daysElapsed : 0;
+    return { monthLabel, foodTotal, perMember: split.perMember, units, totalUnits, countedTotal, overrideTotal, perDayCost };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [purchases, groceryExpenses, mealTypes, optOuts, guests, active, adjustments, flags]);
 
@@ -604,23 +628,33 @@ export default function MealsScreen() {
                     {pausedAll ? 'Turn them back on when you are back.' : 'Turn off while you are away.'}
                   </Text>
                 </View>
-                <Toggle value={!pausedAll} onChange={() => run('pause-meals', togglePause)} disabled={busy === 'pause-meals'} />
+                <Button
+                  label={pausedAll ? 'Turn on' : 'Turn off'}
+                  onPress={() => run('pause-meals', togglePause)}
+                  variant={pausedAll ? 'primary' : 'ghost'}
+                  size="sm"
+                  loading={busy === 'pause-meals'}
+                />
               </Row>
             </Card>
-            {kitchenClosed || isAdmin ? (
+            {kitchenClosed ? (
+              <Card>
+                <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>Kitchen closed</Text>
+                <Text style={{ fontSize: 13, color: p.muted, marginBottom: 8 }}>
+                  No meals are running until the kitchen opens again.
+                </Text>
+                {isAdmin ? (
+                  <Button label="Open kitchen" onPress={() => run('kitchen', toggleKitchen)} loading={busy === 'kitchen'} />
+                ) : null}
+              </Card>
+            ) : isAdmin ? (
               <Card>
                 <Row>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>
-                      Kitchen {kitchenClosed ? 'closed' : 'open'}
-                    </Text>
-                    <Text style={{ fontSize: 13, color: p.muted }}>
-                      {kitchenClosed ? 'No meals are running until it opens again.' : 'Turn off all meals for everyone.'}
-                    </Text>
+                    <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>Kitchen is open</Text>
+                    <Text style={{ fontSize: 13, color: p.muted }}>Turn off all meals for everyone.</Text>
                   </View>
-                  {isAdmin ? (
-                    <Toggle value={!kitchenClosed} onChange={() => run('kitchen', toggleKitchen)} disabled={busy === 'kitchen'} />
-                  ) : null}
+                  <Button label="Close kitchen" onPress={() => run('kitchen', toggleKitchen)} variant="ghost" size="sm" loading={busy === 'kitchen'} />
                 </Row>
               </Card>
             ) : null}
@@ -654,11 +688,14 @@ export default function MealsScreen() {
                       </Pressable>
                     </Row>
                     {isAdmin && !kitchenClosed ? (
-                      <View style={{ marginTop: 8 }}>
-                        <Row>
-                          <Text style={{ flex: 1, fontSize: 13, color: p.muted }}>Serve today</Text>
-                          <Toggle value={!isSkipped(m.id, today)} onChange={() => run(`skipday-${m.id}`, () => toggleSkipped(m.id))} disabled={busy === `skipday-${m.id}`} />
-                        </Row>
+                      <View style={{ marginTop: 8, alignItems: 'flex-start' }}>
+                        <Button
+                          label={isSkipped(m.id, today) ? 'Serve today' : 'No meals today'}
+                          onPress={() => run(`skipday-${m.id}`, () => toggleSkipped(m.id))}
+                          variant="ghost"
+                          size="sm"
+                          loading={busy === `skipday-${m.id}`}
+                        />
                       </View>
                     ) : null}
                   </Card>
@@ -677,12 +714,24 @@ export default function MealsScreen() {
                   key={m.id}
                   onPress={() => {
                     setGuestError('');
+                    setGuestNote('');
                     setGuestMeal(m.id);
+                    setGuestAll(false);
                   }}
-                  style={{ paddingVertical: 7, paddingHorizontal: 12, borderRadius: 16, backgroundColor: guestMeal === m.id ? p.primary : p.surface }}>
-                  <Text style={{ color: guestMeal === m.id ? p.primaryInk : p.ink, fontSize: 13 }}>{m.name}</Text>
+                  style={{ paddingVertical: 7, paddingHorizontal: 12, borderRadius: 16, backgroundColor: !guestAll && guestMeal === m.id ? p.primary : p.surface }}>
+                  <Text style={{ color: !guestAll && guestMeal === m.id ? p.primaryInk : p.ink, fontSize: 13 }}>{m.name}</Text>
                 </Pressable>
               ))}
+            <Pressable
+              onPress={() => {
+                setGuestError('');
+                setGuestNote('');
+                setGuestMeal('');
+                setGuestAll(!guestAll);
+              }}
+              style={{ paddingVertical: 7, paddingHorizontal: 12, borderRadius: 16, backgroundColor: guestAll ? p.primary : p.surface }}>
+              <Text style={{ color: guestAll ? p.primaryInk : p.ink, fontSize: 13 }}>All meals</Text>
+            </Pressable>
           </Row>
           <Text style={{ height: 8 }} />
           <Field label="Guest count" value={guestCount} onChangeText={setGuestCount} keyboardType="number-pad" />
@@ -712,6 +761,7 @@ export default function MealsScreen() {
           </View>
           {guestError ? <Text style={{ color: p.danger, fontSize: 13, marginBottom: 8 }}>{guestError}</Text> : null}
           <Button label="Register guests" onPress={() => run('guests', addGuests)} loading={busy === 'guests'} />
+          {guestNote ? <Text style={{ fontSize: 12, color: p.muted, marginTop: 8 }}>{guestNote}</Text> : null}
           <Text style={{ fontSize: 12, color: p.muted, marginTop: 8 }}>
             Defaults to just you. Tick others to split a guest bill.
           </Text>
@@ -751,7 +801,7 @@ export default function MealsScreen() {
             <Card>
               <Text style={{ color: p.ink }}>Grocery spending: {formatMoney(allocation.foodTotal, active.currency)}</Text>
               <Text style={{ fontSize: 13, color: p.muted, marginBottom: 6 }}>
-                {fmtU(allocation.totalUnits)} meals this month{allocation.overrideTotal !== null ? ' (adjusted)' : ''}
+                {fmtU(allocation.totalUnits)} meals this month{allocation.overrideTotal !== null ? ' (adjusted)' : ''} · {formatMoney(allocation.perDayCost, active.currency)} per day
               </Text>
               {Object.entries(allocation.perMember).map(([uid, amt]) => {
                 const u = allocation.units.find((c) => c.uid === uid)?.units ?? {};
