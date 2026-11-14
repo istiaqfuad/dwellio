@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { addDoc, collection, deleteDoc, doc, getDocs, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { BackButton, Button, Card, EmptyState, Field, Row, Screen, SectionTitle, Subtitle, Title, usePalette } from '@/components/ui';
+import { BackButton, Button, Card, EmptyState, Field, Row, Screen, SectionTitle, Subtitle, Title, Toggle, usePalette } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
 import { useHousehold } from '@/lib/household-context';
 import { useCollection } from '@/lib/use-collection';
@@ -237,23 +237,21 @@ export default function GroceriesScreen() {
         <Subtitle>One shared list for the household. Tick items off while shopping, then record what was spent.</Subtitle>
         <Text style={{ height: 12 }} />
 
-        {groceriesClosed ? (
+        {groceriesClosed || isAdmin ? (
           <Card>
-            <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>Grocery recording is paused</Text>
-            <Text style={{ fontSize: 13, color: p.muted, marginBottom: 8 }}>
-              Recording opens again when an admin turns it back on.
-            </Text>
-            {isAdmin ? (
-              <Button label="Turn recording on" onPress={() => run('groceries-toggle', toggleGroceries)} loading={busy === 'groceries-toggle'} />
-            ) : null}
-          </Card>
-        ) : isAdmin ? (
-          <Card>
-            <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>Grocery recording is on</Text>
-            <Text style={{ fontSize: 13, color: p.muted, marginBottom: 8 }}>
-              Turn off recording for everyone.
-            </Text>
-            <Button label="Turn off" onPress={() => run('groceries-toggle', toggleGroceries)} variant="ghost" size="sm" loading={busy === 'groceries-toggle'} />
+            <Row>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>
+                  Grocery recording is {groceriesClosed ? 'paused' : 'on'}
+                </Text>
+                <Text style={{ fontSize: 13, color: p.muted }}>
+                  {groceriesClosed ? 'Recording opens again when an admin turns it back on.' : 'Turn off recording for everyone.'}
+                </Text>
+              </View>
+              {isAdmin ? (
+                <Toggle value={!groceriesClosed} onChange={() => run('groceries-toggle', toggleGroceries)} disabled={busy === 'groceries-toggle'} />
+              ) : null}
+            </Row>
           </Card>
         ) : null}
 

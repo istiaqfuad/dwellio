@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { addDoc, collection, deleteDoc, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { BackButton, Button, Card, EmptyState, Field, ListRow, Row, Screen, SectionTitle, Subtitle, Title, usePalette } from '@/components/ui';
+import { BackButton, Button, Card, EmptyState, Field, ListRow, Row, Screen, SectionTitle, Subtitle, Title, Toggle, usePalette } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
 import { useHousehold } from '@/lib/household-context';
 import { useCollection } from '@/lib/use-collection';
@@ -604,33 +604,23 @@ export default function MealsScreen() {
                     {pausedAll ? 'Turn them back on when you are back.' : 'Turn off while you are away.'}
                   </Text>
                 </View>
-                <Button
-                  label={pausedAll ? 'Turn on' : 'Turn off'}
-                  onPress={() => run('pause-meals', togglePause)}
-                  variant={pausedAll ? 'primary' : 'ghost'}
-                  size="sm"
-                  loading={busy === 'pause-meals'}
-                />
+                <Toggle value={!pausedAll} onChange={() => run('pause-meals', togglePause)} disabled={busy === 'pause-meals'} />
               </Row>
             </Card>
-            {kitchenClosed ? (
-              <Card>
-                <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>Kitchen closed</Text>
-                <Text style={{ fontSize: 13, color: p.muted, marginBottom: 8 }}>
-                  No meals are running until the kitchen opens again.
-                </Text>
-                {isAdmin ? (
-                  <Button label="Open kitchen" onPress={() => run('kitchen', toggleKitchen)} loading={busy === 'kitchen'} />
-                ) : null}
-              </Card>
-            ) : isAdmin ? (
+            {kitchenClosed || isAdmin ? (
               <Card>
                 <Row>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>Kitchen is open</Text>
-                    <Text style={{ fontSize: 13, color: p.muted }}>Turn off all meals for everyone.</Text>
+                    <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>
+                      Kitchen {kitchenClosed ? 'closed' : 'open'}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: p.muted }}>
+                      {kitchenClosed ? 'No meals are running until it opens again.' : 'Turn off all meals for everyone.'}
+                    </Text>
                   </View>
-                  <Button label="Close kitchen" onPress={() => run('kitchen', toggleKitchen)} variant="ghost" size="sm" loading={busy === 'kitchen'} />
+                  {isAdmin ? (
+                    <Toggle value={!kitchenClosed} onChange={() => run('kitchen', toggleKitchen)} disabled={busy === 'kitchen'} />
+                  ) : null}
                 </Row>
               </Card>
             ) : null}
@@ -664,14 +654,11 @@ export default function MealsScreen() {
                       </Pressable>
                     </Row>
                     {isAdmin && !kitchenClosed ? (
-                      <View style={{ marginTop: 8, alignItems: 'flex-start' }}>
-                        <Button
-                          label={isSkipped(m.id, today) ? 'Serve today' : 'No meals today'}
-                          onPress={() => run(`skipday-${m.id}`, () => toggleSkipped(m.id))}
-                          variant="ghost"
-                          size="sm"
-                          loading={busy === `skipday-${m.id}`}
-                        />
+                      <View style={{ marginTop: 8 }}>
+                        <Row>
+                          <Text style={{ flex: 1, fontSize: 13, color: p.muted }}>Serve today</Text>
+                          <Toggle value={!isSkipped(m.id, today)} onChange={() => run(`skipday-${m.id}`, () => toggleSkipped(m.id))} disabled={busy === `skipday-${m.id}`} />
+                        </Row>
                       </View>
                     ) : null}
                   </Card>

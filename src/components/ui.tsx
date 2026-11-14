@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -182,6 +183,29 @@ export function Button({
     <Pressable style={[styles.base, { backgroundColor: p.primary }]} onPress={onPress} disabled={inactive}>
       {content}
     </Pressable>
+  );
+}
+
+export function Toggle({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
+}) {
+  const p = usePalette();
+  return (
+    <Switch
+      value={value}
+      onValueChange={onChange}
+      disabled={disabled}
+      trackColor={{ false: p.line, true: p.primary }}
+      thumbColor={value ? p.primaryInk : p.muted}
+      ios_backgroundColor={p.line}
+      style={{ opacity: disabled ? 0.5 : 1 }}
+    />
   );
 }
 
