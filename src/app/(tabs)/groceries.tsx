@@ -5,7 +5,7 @@ import { BackButton, Button, Card, EmptyState, Field, Row, Screen, SectionTitle,
 import { useAuth } from '@/lib/auth-context';
 import { useHousehold } from '@/lib/household-context';
 import { useCollection } from '@/lib/use-collection';
-import { currencySymbol, equalShares, formatMoney } from '@/lib/finance';
+import { equalShares, formatMoney } from '@/lib/finance';
 import { db } from '@/lib/firebase';
 import type { Expense, GroceryItem, ShoppingList } from '@/lib/models';
 
@@ -32,7 +32,6 @@ export default function GroceriesScreen() {
   const groceriesClosed = flags.some((f) => f.id === GROCERIES_CLOSED);
 
   const [itemName, setItemName] = useState('');
-  const [total, setTotal] = useState('');
   const [recordFor, setRecordFor] = useState('');
   const [paid, setPaid] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -179,25 +178,17 @@ export default function GroceriesScreen() {
       setPurchaseError('Grocery recording is paused right now.');
       return;
     }
-    const t = parseFloat(total);
-    if (Number.isNaN(t) || t <= 0) {
-      setPurchaseError('Enter the total first.');
-      return;
-    }
     const entered: { uid: string; amount: number }[] = [];
     for (const m of members) {
       const v = parseFloat((paid[m.id] ?? '').trim());
       if (!Number.isNaN(v) && v > 0) entered.push({ uid: m.id, amount: Math.round(v * 100) / 100 });
     }
-    let contribs = entered;
-    if (entered.length === 0) contribs = [{ uid: user.uid, amount: t }];
-    else {
-      const splitSum = entered.reduce((s, c) => s + c.amount, 0);
-      if (Math.abs(splitSum - t) > 0.01) {
-        setPurchaseError('Split amounts must add up to the total.');
-        return;
-      }
+    if (entered.length === 0) {
+      setPurchaseError('Enter what each person paid below.');
+      return;
     }
+    const contribs = entered;
+    const t = contribs.reduce((s, c) => s + c.amount, 0);
     setPurchaseError('');
     const recordedList = lists.find((l) => l.id === recordFor);
     const listName = recordedList?.name ?? 'list';
@@ -225,7 +216,6 @@ export default function GroceriesScreen() {
       await deleteDoc(doc(db, 'households', hid, 'lists', recordFor));
     }
     await logActivity('grocery', `${user.displayName ?? 'Someone'} recorded a purchase of ${formatMoney(t, active.currency)}`);
-    setTotal('');
     setPaid({});
     setRecordFor('');
   }
@@ -351,18 +341,8 @@ export default function GroceriesScreen() {
             <Text style={{ fontWeight: '700', color: p.ink, marginBottom: 6 }}>
               Record purchase · {lists.find((l) => l.id === recordFor)?.name ?? 'list'}
             </Text>
-            <Field
-              label={`Total (${currencySymbol(active.currency)})`}
-              value={total}
-              onChangeText={(v) => {
-                setPurchaseError('');
-                setTotal(v);
-              }}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-            />
             <Text style={{ fontSize: 12, color: p.muted, marginBottom: 8 }}>
-              The full total goes to meal billing. Leave all blank if you paid it all.
+              The total adds up automatically and goes to meal billing. Leave blank anyone who did not pay.
             </Text>
             <Text style={{ fontSize: 13, fontWeight: '600', color: p.muted, marginBottom: 6 }}>Paid by</Text>
             {members.map((m) => (
@@ -375,7 +355,7 @@ export default function GroceriesScreen() {
                   setPaid((prev) => ({ ...prev, [m.id]: v }));
                 }}
                 keyboardType="decimal-pad"
-                placeholder={m.id === user?.uid ? total || '0.00' : '0.00'}
+                placeholder="0.00"
               />
             ))}
             {purchaseError ? <Text style={{ color: p.danger, fontSize: 13, marginBottom: 8 }}>{purchaseError}</Text> : null}
