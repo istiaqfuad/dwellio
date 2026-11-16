@@ -472,6 +472,15 @@ service cloud.firestore {
         allow read: if isMember(hid);
         allow create: if isAdmin(hid) && isValidAnnouncement(request.resource.data);
         allow update: if isAdmin(hid) && isValidAnnouncement(request.resource.data);
+        // Any member can mark an announcement read, but only for themselves:
+        // the update may touch nothing but ackedBy, must keep every existing
+        // entry, and must add exactly the reader's own uid.
+        allow update: if isMember(hid) && isValidAnnouncement(request.resource.data) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ackedBy']) &&
+          !(request.auth.uid in resource.data.ackedBy) &&
+          request.resource.data.ackedBy.hasAll(resource.data.ackedBy) &&
+          request.resource.data.ackedBy.hasAll([request.auth.uid]) &&
+          request.resource.data.ackedBy.size() == resource.data.ackedBy.size() + 1;
         allow delete: if isAdmin(hid);
 
         match /comments/{cid} {

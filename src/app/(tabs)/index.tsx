@@ -319,6 +319,41 @@ export default function DashboardScreen() {
           </Card>
         )}
 
+        {(latestAnnouncements.length > 0 || announcementsLoading) && (
+          <>
+            <SectionTitle>Announcements</SectionTitle>
+            {announcementsLoading && latestAnnouncements.length === 0 ? (
+              <Card>
+                <Skeleton height={18} />
+                <Skeleton height={14} width="80%" />
+              </Card>
+            ) : (
+            <>
+              {latestAnnouncements.map((a) => (
+                <Link key={a.id} href="/announcements" asChild>
+                  <Pressable>
+                    <Card style={a.pinned ? { borderColor: p.accent } : undefined}>
+                      <Row gap={8}>
+                        <Text style={{ flex: 1, fontWeight: '700', color: p.ink }} numberOfLines={1}>{a.title}</Text>
+                        {a.pinned ? (
+                          <Text style={{ fontSize: 12, color: p.accent, fontWeight: '700' }}>Pinned</Text>
+                        ) : null}
+                      </Row>
+                      <Text style={{ fontSize: 13, color: p.muted }} numberOfLines={2}>{a.message}</Text>
+                    </Card>
+                  </Pressable>
+                </Link>
+              ))}
+              <Link href="/announcements" asChild>
+                <Pressable style={{ marginTop: 10, alignItems: 'center' }}>
+                  <Text style={{ color: p.primary, fontWeight: '600', fontSize: 13 }}>Open announcements ›</Text>
+                </Pressable>
+              </Link>
+            </>
+            )}
+          </>
+        )}
+
         {!!active?.modules.meals && (
           <>
             <SectionTitle>Meals today</SectionTitle>
@@ -491,41 +526,6 @@ export default function DashboardScreen() {
                 </Text>
               </Card>
             ))
-            )}
-          </>
-        )}
-
-        {(latestAnnouncements.length > 0 || announcementsLoading) && (
-          <>
-            <SectionTitle>Announcements</SectionTitle>
-            {announcementsLoading && latestAnnouncements.length === 0 ? (
-              <Card>
-                <Skeleton height={18} />
-                <Skeleton height={14} width="80%" />
-              </Card>
-            ) : (
-            <>
-              {latestAnnouncements.map((a) => (
-                <Link key={a.id} href="/announcements" asChild>
-                  <Pressable>
-                    <Card style={a.pinned ? { borderColor: p.accent } : undefined}>
-                      <Row gap={8}>
-                        <Text style={{ flex: 1, fontWeight: '700', color: p.ink }} numberOfLines={1}>{a.title}</Text>
-                        {a.pinned ? (
-                          <Text style={{ fontSize: 12, color: p.accent, fontWeight: '700' }}>Pinned</Text>
-                        ) : null}
-                      </Row>
-                      <Text style={{ fontSize: 13, color: p.muted }} numberOfLines={2}>{a.message}</Text>
-                    </Card>
-                  </Pressable>
-                </Link>
-              ))}
-              <Link href="/announcements" asChild>
-                <Pressable style={{ marginTop: 10, alignItems: 'center' }}>
-                  <Text style={{ color: p.primary, fontWeight: '600', fontSize: 13 }}>Open announcements ›</Text>
-                </Pressable>
-              </Link>
-            </>
             )}
           </>
         )}

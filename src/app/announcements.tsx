@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import { addDoc, collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { BackButton, Button, Card, EmptyState, Field, Row, Screen, SectionTitle, Subtitle, Title, usePalette } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
 import { useHousehold } from '@/lib/household-context';
@@ -84,7 +84,7 @@ export default function AnnouncementsScreen() {
   async function ack(a: Announcement) {
     if (!user || a.ackedBy.includes(user.uid)) return;
     await updateDoc(doc(db, 'households', hid, 'announcements', a.id), {
-      ackedBy: [...a.ackedBy, user.uid],
+      ackedBy: arrayUnion(user.uid),
     });
   }
 
