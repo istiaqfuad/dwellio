@@ -197,7 +197,7 @@ export default function GroceriesScreen() {
 
   async function recordPurchase() {
     if (!user || !recordFor || !active) return;
-    if (groceriesClosed) {
+    if (groceriesClosed && !isAdmin) {
       setPurchaseError('Grocery recording is paused right now.');
       return;
     }
@@ -259,7 +259,7 @@ export default function GroceriesScreen() {
                   Grocery recording is {groceriesClosed ? 'paused' : 'on'}
                 </Text>
                 <Text style={{ fontSize: 13, color: p.muted }}>
-                  {groceriesClosed ? 'Recording opens again when an admin turns it back on.' : 'Turn off recording for everyone.'}
+                  {groceriesClosed ? 'Recording opens again when an admin turns it back on.' : 'Turn off recording for everyone but admins.'}
                 </Text>
               </View>
               {isAdmin ? (
@@ -359,7 +359,7 @@ export default function GroceriesScreen() {
               {itemError ? <Text style={{ color: p.danger, fontSize: 13, marginBottom: 8 }}>{itemError}</Text> : null}
               <Button label="Add" onPress={() => run('add', addItem)} loading={busy === 'add'} />
               <Text style={{ height: 8 }} />
-              {!groceriesClosed && (
+              {(!groceriesClosed || isAdmin) && (
                 <Button label={recordFor ? 'Close' : 'Record purchase'} onPress={() => setRecordFor(recordFor ? '' : openList)} variant="ghost" />
               )}
             </Card>
