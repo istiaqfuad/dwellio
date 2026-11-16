@@ -317,9 +317,11 @@ export default function HouseholdScreen() {
       ...listsSnap.docs.map((l) => deleteDocsAt(`households/${targetHid}/lists/${l.id}/items`)),
       ...annSnap.docs.map((a) => deleteDocsAt(`households/${targetHid}/announcements/${a.id}/comments`)),
     ]);
-    // Phase 2: every subcollection. Membership docs stay until last so every
-    // delete in this batch still passes the admin check.
-    const skip = keepMembership ? ['members', 'invites'] : [];
+    // Phase 2: every subcollection except members. Member docs always stay
+    // until last (see deleteMembershipAndRoot): deleting our own member doc
+    // inside this batch would revoke the admin check for the remaining
+    // deletes and fail the whole wipe with a permissions error.
+    const skip = keepMembership ? ['members', 'invites'] : ['members'];
     await Promise.all(
       ALL_SUBCOLLECTIONS.filter((c) => !skip.includes(c)).map((c) => deleteDocsAt(`households/${targetHid}/${c}`)),
     );
