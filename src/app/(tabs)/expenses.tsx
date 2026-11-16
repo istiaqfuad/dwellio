@@ -13,6 +13,7 @@ import { useHousehold } from '@/lib/household-context';
 import { useCollection } from '@/lib/use-collection';
 import { computeBalances, currencySymbol, equalShares, formatMoney, suggestSettlements } from '@/lib/finance';
 import { db } from '@/lib/firebase';
+import { notifyHouseholdMember } from '@/lib/push';
 import type { Expense, Settlement } from '@/lib/models';
 
 const DEFAULT_CATEGORIES = ['Rent', 'Groceries', 'Electricity', 'Gas', 'Water', 'Internet', 'Cleaning Supplies', 'Household Maintenance', 'Other'];
@@ -184,6 +185,15 @@ export default function ExpensesScreen() {
         ? `${user.displayName ?? 'Someone'} recorded a payment of ${formatMoney(amountVal, active.currency)} to ${nameOf(to)} (waiting for confirmation)`
         : `${user.displayName ?? 'Someone'} paid ${formatMoney(amountVal, active.currency)} to ${nameOf(to)}`,
     );
+    if (requireConfirm) {
+      void notifyHouseholdMember(
+        hid,
+        to,
+        'Payment needs your confirmation',
+        `${user.displayName ?? 'Someone'} recorded a payment of ${formatMoney(amountVal, active.currency)} to you.`,
+        { screen: '/expenses' },
+      );
+    }
   }
 
   async function togglePolicy(next: boolean) {
@@ -194,6 +204,17 @@ export default function ExpensesScreen() {
 
   async function settleStatus(s: Settlement, status: 'completed' | 'rejected') {
     await updateDoc(doc(db, 'households', hid, 'settlements', s.id), { status });
+    if (!user || !active) return;
+    if (s.payerId !== user.uid) {
+      const verb = status === 'completed' ? 'confirmed' : 'declined';
+      void notifyHouseholdMember(
+        hid,
+        s.payerId,
+        `Payment ${verb}`,
+        `${user.displayName ?? 'Someone'} ${verb} your ${formatMoney(s.amount, active.currency)} payment.`,
+        { screen: '/expenses' },
+      );
+    }
   }
 
   return (

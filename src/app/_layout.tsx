@@ -1,9 +1,11 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
-import { HouseholdProvider } from '@/lib/household-context';
+import { HouseholdProvider, useHousehold } from '@/lib/household-context';
 import { Loading } from '@/components/ui';
+import { Notifications, PUSH_OPT_OUT_KEY, registerPushToken } from '@/lib/push';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -42,6 +44,40 @@ function Gate() {
   return null;
 }
 
+function PushSetup() {
+  const { user } = useAuth();
+  const { households } = useHousehold();
+  const router = useRouter();
+  const doneRef = useRef('');
+
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const screen = response.notification.request.content.data?.screen;
+      if (typeof screen === 'string' && screen.startsWith('/')) router.push(screen as never);
+    });
+    return () => sub.remove();
+  }, [router]);
+
+  const key = user ? `${user.uid}:${households.map((h) => h.id).sort().join(',')}` : '';
+  useEffect(() => {
+    if (!user || key === doneRef.current) return;
+    doneRef.current = key;
+    (async () => {
+      try {
+        if (await AsyncStorage.getItem(PUSH_OPT_OUT_KEY)) return;
+        for (const h of households) {
+          await registerPushToken(h.id, user.uid);
+        }
+      } catch {
+        // Push stays off; the profile toggle can re-enable it later.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return null;
+}
+
 function Shell() {
   // Do not mount any route until auth state resolves. Otherwise the
   // initial tab screen flashes for a frame before the gate redirects
@@ -49,7 +85,9 @@ function Shell() {
   const { loading } = useAuth();
   if (loading) return <Loading />;
   return (
-    <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+    <>
+      <PushSetup />
+      <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="sign-in" />
       <Stack.Screen name="sign-up" />
@@ -64,7 +102,8 @@ function Shell() {
       <Stack.Screen name="reports" options={{ animation: 'fade', animationDuration: 320 }} />
       <Stack.Screen name="household" options={{ animation: 'fade', animationDuration: 320 }} />
       <Stack.Screen name="profile" options={{ animation: 'fade', animationDuration: 320 }} />
-    </Stack>
+      </Stack>
+    </>
   );
 }
 

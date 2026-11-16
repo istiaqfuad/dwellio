@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useHousehold } from '@/lib/household-context';
 import { useCollection } from '@/lib/use-collection';
 import { db } from '@/lib/firebase';
+import { notifyHouseholdMember } from '@/lib/push';
 import type { TaskItem } from '@/lib/models';
 
 export default function TasksScreen() {
@@ -78,6 +79,9 @@ export default function TasksScreen() {
 
   async function assign(t: TaskItem, uid: string) {
     await updateDoc(doc(db, 'households', hid, 'tasks', t.id), { assigneeId: uid, status: 'assigned' });
+    if (user && uid !== user.uid) {
+      void notifyHouseholdMember(hid, uid, 'New task for you', t.title, { screen: '/tasks' });
+    }
   }
 
   async function removeTask(t: TaskItem) {

@@ -517,6 +517,20 @@ service cloud.firestore {
         allow update, delete: if isMember(hid);
       }
 
+      // Device push tokens, one doc per member. Members need each other's
+      // tokens to send event-driven pushes; each member may only write
+      // their own doc.
+      match /pushTokens/{uid} {
+        allow read: if isMember(hid);
+        allow create, update: if isAuthenticated() && request.auth.uid == uid &&
+          hasOnlyAllowedFields(['token', 'platform', 'updatedAt']) &&
+          request.resource.data.token is string &&
+          request.resource.data.token.size() >= 1 &&
+          request.resource.data.token.size() <= 500 &&
+          (!( 'platform' in request.resource.data) || request.resource.data.platform in ['android', 'ios', 'web']);
+        allow delete: if isAuthenticated() && request.auth.uid == uid;
+      }
+
       match /activity/{aid} {
         allow read: if isMember(hid);
         allow create: if isMember(hid) &&

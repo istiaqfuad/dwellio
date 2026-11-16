@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useHousehold } from '@/lib/household-context';
 import { useCollection } from '@/lib/use-collection';
 import { db } from '@/lib/firebase';
+import { notifyHouseholdExcept } from '@/lib/push';
 import type { Announcement } from '@/lib/models';
 
 interface Comment {
@@ -78,6 +79,7 @@ export default function AnnouncementsScreen() {
       createdAt: serverTimestamp(),
     });
     await logActivity('announcement', `${user.displayName ?? 'Someone'} posted: ${title.trim()}`);
+    void notifyHouseholdExcept(hid, user.uid, 'New announcement', title.trim(), { screen: '/announcements' });
     setTitle('');
     setMessage('');
   }
