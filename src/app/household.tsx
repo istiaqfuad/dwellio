@@ -41,10 +41,68 @@ function makeCode(): string {
   return out;
 }
 
+const ALL_SUBCOLLECTIONS = [
+  'members',
+  'invites',
+  'joinRequests',
+  'expenses',
+  'settlements',
+  'categories',
+  'mealTypes',
+  'optOuts',
+  'skippedDays',
+  'mealAdjustments',
+  'flags',
+  'guests',
+  'billingPeriods',
+  'lists',
+  'assignments',
+  'purchases',
+  'tasks',
+  'announcements',
+  'bills',
+  'polls',
+  'events',
+  'activity',
+];
+
+function MemberAvatar({ name }: { name: string }) {
+  const p = usePalette();
+  const initial = (name.trim().charAt(0) || '?').toUpperCase();
+  return (
+    <View
+      style={{
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: `${p.primary}1F`,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+      <Text style={{ color: p.primary, fontWeight: '800', fontSize: 17 }}>{initial}</Text>
+    </View>
+  );
+}
+
+function RolePill({ role }: { role: string }) {
+  const p = usePalette();
+  const style =
+    role === 'owner'
+      ? { color: p.primary, bg: `${p.primary}1F`, label: 'Owner' }
+      : role === 'admin'
+        ? { color: p.accent, bg: `${p.accent}1F`, label: 'Admin' }
+        : { color: p.muted, bg: p.surface, label: 'Member' };
+  return (
+    <View style={{ paddingVertical: 3, paddingHorizontal: 10, borderRadius: 12, backgroundColor: style.bg }}>
+      <Text style={{ color: style.color, fontWeight: '700', fontSize: 12 }}>{style.label}</Text>
+    </View>
+  );
+}
+
 export default function HouseholdScreen() {
   const p = usePalette();
   const { user } = useAuth();
-  const { active, archived, members, isAdmin, isOwner, logActivity, updateModules } = useHousehold();
+  const { active, archived, households, members, isAdmin, isOwner, logActivity, selectHousehold, updateModules } = useHousehold();
   const hid = active?.id ?? '';
 
   const { items: pendingInvites } = useCollection<{
@@ -198,13 +256,85 @@ export default function HouseholdScreen() {
   }
 
   async function eraseHistory(uid: string) {
-    const kinds = ['expenses', 'settlements', 'tasks'];
-    for (const kind of kinds) {
-      const snap = await getDocs(query(collection(db, 'households', hid, kind), where('createdBy', '==', uid)));
+    // Top-level docs keyed by author. Bills track responsibleId instead of createdBy.
+    const byField: [string, string][] = [
+      ['expenses', 'createdBy'],
+      ['settlements', 'createdBy'],
+      ['tasks', 'createdBy'],
+      ['polls', 'createdBy'],
+      ['announcements', 'createdBy'],
+      ['events', 'createdBy'],
+      ['purchases', 'recordedBy'],
+      ['bills', 'responsibleId'],
+      ['activity', 'actorId'],
+      ['guests', 'uid'],
+      ['optOuts', 'uid'],
+      ['mealAdjustments', 'uid'],
+    ];
+    for (const [kind, field] of byField) {
+      const snap = await getDocs(query(collection(db, 'households', hid, kind), where(field, '==', uid)));
       await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
     }
+    // Grocery items they added, across every list.
+    const listsSnap = await getDocs(collection(db, 'households', hid, 'lists'));
+    await Promise.all(
+      listsSnap.docs.map(async (l) => {
+        const itemsSnap = await getDocs(
+          query(collection(db, 'households', hid, 'lists', l.id, 'items'), where('addedBy', '==', uid)),
+        );
+        await Promise.all(itemsSnap.docs.map((d) => deleteDoc(d.ref)));
+      }),
+    );
+    // Comments they left, including on announcements that are being erased.
+    const annSnap = await getDocs(collection(db, 'households', hid, 'announcements'));
+    await Promise.all(
+      annSnap.docs.map(async (a) => {
+        const keep = (a.data() as { createdBy?: string }).createdBy !== uid;
+        const csnap = await getDocs(
+          query(collection(db, 'households', hid, 'announcements', a.id, 'comments'), where('authorId', '==', uid)),
+        );
+        await Promise.all(csnap.docs.map((d) => deleteDoc(d.ref)));
+        if (!keep) await deleteDoc(a.ref);
+      }),
+    );
     await logActivity('member', 'Historical records of a former member were deleted by an admin');
     setConfirmDanger('');
+  }
+
+  async function deleteDocsAt(path: string) {
+    const snap = await getDocs(collection(db, path));
+    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  }
+
+  async function wipeSubcollections(targetHid: string, keepMembership: boolean) {
+    // Phase 1: nested docs and invite codes while membership is intact.
+    const [invitesSnap, listsSnap, annSnap] = await Promise.all([
+      getDocs(collection(db, `households/${targetHid}/invites`)),
+      getDocs(collection(db, `households/${targetHid}/lists`)),
+      getDocs(collection(db, `households/${targetHid}/announcements`)),
+    ]);
+    await Promise.all([
+      ...listsSnap.docs.map((l) => deleteDocsAt(`households/${targetHid}/lists/${l.id}/items`)),
+      ...annSnap.docs.map((a) => deleteDocsAt(`households/${targetHid}/announcements/${a.id}/comments`)),
+    ]);
+    // Phase 2: every subcollection. Membership docs stay until last so every
+    // delete in this batch still passes the admin check.
+    const skip = keepMembership ? ['members', 'invites'] : [];
+    await Promise.all(
+      ALL_SUBCOLLECTIONS.filter((c) => !skip.includes(c)).map((c) => deleteDocsAt(`households/${targetHid}/${c}`)),
+    );
+    if (!keepMembership) {
+      await Promise.all(invitesSnap.docs.map((d) => deleteDoc(doc(db, 'inviteCodes', d.id)).catch(() => {})));
+    }
+  }
+
+  async function deleteMembershipAndRoot(targetHid: string) {
+    // Other members first, then the household doc, then our own member doc
+    // (self-delete needs no admin check, so it works after the household is gone).
+    const memSnap = await getDocs(collection(db, `households/${targetHid}/members`));
+    await Promise.all(memSnap.docs.filter((d) => d.id !== user?.uid).map((d) => deleteDoc(d.ref)));
+    await deleteDoc(doc(db, 'households', targetHid));
+    if (user) await deleteDoc(doc(db, 'households', targetHid, 'members', user.uid)).catch(() => {});
   }
 
   async function renameHousehold() {
@@ -237,7 +367,23 @@ export default function HouseholdScreen() {
     if (!active) return;
     const snap = await getDoc(doc(db, 'households', hid));
     if (!snap.exists()) return;
-    await deleteDoc(doc(db, 'households', hid));
+    await wipeSubcollections(hid, false);
+    await deleteMembershipAndRoot(hid);
+    const others = households.filter((h) => h.id !== hid);
+    await selectHousehold(others[0]?.id ?? '');
+    setConfirmDanger('');
+  }
+
+  async function clearHousehold() {
+    if (!active) return;
+    await wipeSubcollections(hid, true);
+    await logActivity('household', `${user?.displayName ?? 'Someone'} cleared all household content`);
+    setConfirmDanger('');
+  }
+
+  async function wipeArchivedHousehold(targetHid: string) {
+    await wipeSubcollections(targetHid, false);
+    await deleteMembershipAndRoot(targetHid);
     setConfirmDanger('');
   }
 
@@ -245,56 +391,98 @@ export default function HouseholdScreen() {
     <Screen style={{ padding: 0 }}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
         <BackButton />
-        <Title>{active.name}</Title>
-        <Subtitle>
-          {currencySymbol(active.currency)} · {members.length} members · {isOwner ? 'Owner' : isAdmin ? 'Admin' : 'Member'}
-        </Subtitle>
-        {isAdmin ? (
-          renaming ? (
-            <Card style={{ marginTop: 12 }}>
-              <Field
-                label="House name"
-                value={houseName}
-                onChangeText={(v) => {
-                  setNameError('');
-                  setHouseName(v);
-                }}
-                placeholder={active.name}
-                maxLength={120}
-              />
-              {nameError ? <Text style={{ color: p.danger, fontSize: 13, marginBottom: 8 }}>{nameError}</Text> : null}
-              <Row gap={8}>
-                <View style={{ flex: 1 }}>
-                  <Button label="Save name" onPress={() => run('rename', renameHousehold)} size="sm" loading={busy === 'rename'} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Button
-                    label="Cancel"
-                    onPress={() => {
-                      setRenaming(false);
-                      setNameError('');
-                    }}
-                    variant="ghost"
-                    size="sm"
-                  />
-                </View>
-              </Row>
-            </Card>
-          ) : (
-            <View style={{ alignItems: 'flex-start', marginTop: 8 }}>
-              <Button
-                label="Rename house"
-                onPress={() => {
-                  setNameError('');
-                  setHouseName(active.name);
-                  setRenaming(true);
-                }}
-                variant="ghost"
-                size="sm"
-              />
+        <Card>
+          <Row gap={12}>
+            <MemberAvatar name={active.name} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: '800', color: p.ink, fontSize: 20 }}>{active.name}</Text>
+              <Text style={{ fontSize: 13, color: p.muted, marginTop: 2 }}>
+                {currencySymbol(active.currency)} · {members.length} member{members.length === 1 ? '' : 's'}
+              </Text>
             </View>
-          )
-        ) : null}
+            <RolePill role={isOwner ? 'owner' : isAdmin ? 'admin' : 'member'} />
+          </Row>
+          {isAdmin ? (
+            renaming ? (
+              <View style={{ marginTop: 12 }}>
+                <Field
+                  label="House name"
+                  value={houseName}
+                  onChangeText={(v) => {
+                    setNameError('');
+                    setHouseName(v);
+                  }}
+                  placeholder={active.name}
+                  maxLength={120}
+                />
+                {nameError ? <Text style={{ color: p.danger, fontSize: 13, marginBottom: 8 }}>{nameError}</Text> : null}
+                <Row gap={8}>
+                  <View style={{ flex: 1 }}>
+                    <Button label="Save name" onPress={() => run('rename', renameHousehold)} size="sm" loading={busy === 'rename'} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      label="Cancel"
+                      onPress={() => {
+                        setRenaming(false);
+                        setNameError('');
+                      }}
+                      variant="ghost"
+                      size="sm"
+                    />
+                  </View>
+                </Row>
+              </View>
+            ) : (
+              <View style={{ marginTop: 10, alignItems: 'flex-start' }}>
+                <Button
+                  label="Rename house"
+                  onPress={() => {
+                    setNameError('');
+                    setHouseName(active.name);
+                    setRenaming(true);
+                  }}
+                  variant="ghost"
+                  size="sm"
+                />
+              </View>
+            )
+          ) : null}
+        </Card>
+
+        <SectionTitle>My households</SectionTitle>
+        <Card>
+          {households.map((h) => {
+            const isCurrent = h.id === hid;
+            const role = h.ownerId === user?.uid ? 'Owner' : 'Member';
+            return (
+              <View key={h.id} style={{ paddingVertical: 8 }}>
+                <Row gap={12}>
+                  <MemberAvatar name={h.name} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: '700', color: p.ink }}>{h.name}</Text>
+                    <Text style={{ fontSize: 13, color: p.muted, marginTop: 2 }}>
+                      {h.memberIds.length} member{h.memberIds.length === 1 ? '' : 's'} · {role}
+                    </Text>
+                  </View>
+                  {isCurrent ? (
+                    <View style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 14, backgroundColor: `${p.primary}1F` }}>
+                      <Text style={{ color: p.primary, fontWeight: '700', fontSize: 13 }}>Active</Text>
+                    </View>
+                  ) : (
+                    <Button
+                      label="Switch"
+                      onPress={() => run(`switch-${h.id}`, () => selectHousehold(h.id))}
+                      variant="ghost"
+                      size="sm"
+                      loading={busy === `switch-${h.id}`}
+                    />
+                  )}
+                </Row>
+              </View>
+            );
+          })}
+        </Card>
 
         {isAdmin && (
           <>
@@ -377,21 +565,26 @@ export default function HouseholdScreen() {
           </>
         )}
 
-        <SectionTitle>Members</SectionTitle>
+        <SectionTitle>Members ({members.length})</SectionTitle>
         {members.map((m) => (
           <Card key={m.id}>
-            <Row>
+            <Row gap={12}>
+              <MemberAvatar name={m.displayName} />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '700', color: p.ink }}>{m.displayName}</Text>
-                <Text style={{ fontSize: 13, color: p.muted }}>
-                  {m.role}
-                  {isAdmin && m.id !== user?.uid ? ` · ${m.email || ''}` : ''}
-                </Text>
+                <Row gap={8}>
+                  <Text style={{ flex: 1, fontWeight: '700', color: p.ink }}>
+                    {m.displayName}
+                    {m.id === user?.uid ? ' · you' : ''}
+                  </Text>
+                  <RolePill role={m.role} />
+                </Row>
+                {isAdmin && m.email ? (
+                  <Text style={{ fontSize: 13, color: p.muted, marginTop: 2 }}>{m.email}</Text>
+                ) : null}
               </View>
-              {m.id === user?.uid ? <Text style={{ color: p.muted }}>You</Text> : null}
             </Row>
             {isAdmin && m.id !== user?.uid && (
-              <View style={{ marginTop: 10, gap: 8 }}>
+              <View style={{ marginTop: 12, gap: 8 }}>
                 <Row gap={8}>
                   {m.role === 'member' ? (
                     <Button
@@ -444,6 +637,9 @@ export default function HouseholdScreen() {
                     <Button label="Erase history" onPress={() => setConfirmDanger(m.id)} variant="ghost" size="sm" />
                   )}
                 </Row>
+                <Text style={{ fontSize: 12, color: p.muted }}>
+                  Erase history removes everything they created: expenses, purchases, bills, tasks, polls, announcements, activity, guests and grocery items.
+                </Text>
               </View>
             )}
             {isAdmin && m.role !== 'owner' && (
@@ -548,7 +744,9 @@ export default function HouseholdScreen() {
             <Card>
               <Text style={{ fontWeight: '600', color: p.ink, marginBottom: 6 }}>Settlement confirmations</Text>
               <Text style={{ fontSize: 13, color: p.muted }}>
-                Every payment stays pending until the receiver confirms it.
+                {active.settlementPolicy === 'immediate'
+                  ? 'Payments complete right away. Change this from the Expenses screen.'
+                  : 'Every payment stays pending until the receiver confirms it. Change this from the Expenses screen.'}
               </Text>
               <Text style={{ fontSize: 13, color: p.muted, marginTop: 6 }}>
                 Guest meals are paid by the host by default. Pick others while registering a guest to split that bill.
@@ -568,13 +766,22 @@ export default function HouseholdScreen() {
                 loading={busy === 'archive'}
               />
               <Text style={{ height: 8 }} />
+              {confirmDanger === 'clear' ? (
+                <Button label="Tap again to clear everything" onPress={() => run('clear', clearHousehold)} variant="danger" loading={busy === 'clear'} />
+              ) : (
+                <Button label="Clear all content" onPress={() => setConfirmDanger('clear')} variant="danger" />
+              )}
+              <Text style={{ fontSize: 12, color: p.muted, marginTop: 6 }}>
+                Clearing removes every expense, bill, task, grocery item, poll and announcement, but keeps the house and its members.
+              </Text>
+              <Text style={{ height: 8 }} />
               {confirmDanger === 'wipe' ? (
                 <Button label="Tap again to permanently delete" onPress={() => run('wipe', wipeHousehold)} variant="danger" loading={busy === 'wipe'} />
               ) : (
                 <Button label="Delete permanently" onPress={() => setConfirmDanger('wipe')} variant="danger" />
               )}
               <Text style={{ fontSize: 12, color: p.muted, marginTop: 6 }}>
-                Archiving makes the household read only. Deleting is permanent and needs your confirmation.
+                Archiving makes the household read only. Deleting removes the house and everything in it, and needs your confirmation.
               </Text>
             </Card>
           </>
@@ -585,7 +792,7 @@ export default function HouseholdScreen() {
             <SectionTitle>Archived</SectionTitle>
             {archived.map((h) => (
               <Card key={h.id}>
-                <Row>
+                <Row gap={8}>
                   <Text style={{ flex: 1, color: p.ink }}>{h.name}</Text>
                   <Button
                     label="Restore"
@@ -594,6 +801,22 @@ export default function HouseholdScreen() {
                     size="sm"
                     loading={busy === `restore-${h.id}`}
                   />
+                  {confirmDanger === `wipe-archived-${h.id}` ? (
+                    <Button
+                      label="Confirm delete"
+                      onPress={() => run(`wipe-archived-${h.id}`, () => wipeArchivedHousehold(h.id))}
+                      variant="danger"
+                      size="sm"
+                      loading={busy === `wipe-archived-${h.id}`}
+                    />
+                  ) : (
+                    <Button
+                      label="Delete"
+                      onPress={() => setConfirmDanger(`wipe-archived-${h.id}`)}
+                      variant="ghost"
+                      size="sm"
+                    />
+                  )}
                 </Row>
               </Card>
             ))}
