@@ -519,12 +519,16 @@ export default function DashboardScreen() {
               </Card>
             ) : (
             openTasks.slice(0, 3).map((t) => (
-              <Card key={t.id}>
-                <Text style={{ fontWeight: '700', color: p.ink }}>{t.title}</Text>
-                <Text style={{ fontSize: 13, color: p.muted }}>
-                  {[t.assigneeId ? nameOf(t.assigneeId) : 'Unassigned', t.status.replace('_', ' ')].join(' · ')}
-                </Text>
-              </Card>
+              <Link key={t.id} href="/tasks" asChild>
+                <Pressable>
+                  <Card>
+                    <Text style={{ fontWeight: '700', color: p.ink }}>{t.title}</Text>
+                    <Text style={{ fontSize: 13, color: p.muted }}>
+                      {[t.assigneeId ? nameOf(t.assigneeId) : 'Unassigned', t.status.replace('_', ' ')].join(' · ')}
+                    </Text>
+                  </Card>
+                </Pressable>
+              </Link>
             ))
             )}
           </>
