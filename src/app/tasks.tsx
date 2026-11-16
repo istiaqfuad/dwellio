@@ -109,7 +109,29 @@ export default function TasksScreen() {
                   loading={busy === `done-${t.id}`}
                 />
               ) : t.status === 'awaiting_approval' ? (
-                <Text style={{ fontSize: 13, color: p.primary, fontWeight: '600' }}>Waiting for admin approval</Text>
+                isAdmin ? (
+                  <Row gap={8}>
+                    <View style={{ flex: 1 }}>
+                      <Button
+                        label="Approve"
+                        onPress={() => run(`approve-${t.id}`, () => setStatus(t, 'completed'))}
+                        size="sm"
+                        loading={busy === `approve-${t.id}`}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Button
+                        label="Rework"
+                        onPress={() => run(`rework-${t.id}`, () => setStatus(t, 'in_progress'))}
+                        variant="ghost"
+                        size="sm"
+                        loading={busy === `rework-${t.id}`}
+                      />
+                    </View>
+                  </Row>
+                ) : (
+                  <Text style={{ fontSize: 13, color: p.primary, fontWeight: '600' }}>Waiting for admin approval</Text>
+                )
               ) : (
                 <Row gap={8}>
                   <View style={{ flex: 1 }}>
