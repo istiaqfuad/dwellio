@@ -5,7 +5,6 @@ export interface HouseholdModules {
   meals: boolean;
   groceries: boolean;
   tasks: boolean;
-  calendar: boolean;
   bills: boolean;
   polls: boolean;
   announcements: boolean;
@@ -16,7 +15,6 @@ export const ALL_MODULES: HouseholdModules = {
   meals: true,
   groceries: true,
   tasks: true,
-  calendar: true,
   bills: true,
   polls: true,
   announcements: true,

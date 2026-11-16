@@ -57,7 +57,6 @@ function Shell() {
       <Stack.Screen name="tasks" options={{ animation: 'fade', animationDuration: 320 }} />
       <Stack.Screen name="bills" options={{ animation: 'fade', animationDuration: 320 }} />
       <Stack.Screen name="polls" options={{ animation: 'fade', animationDuration: 320 }} />
-      <Stack.Screen name="calendar" options={{ animation: 'fade', animationDuration: 320 }} />
       <Stack.Screen name="announcements" options={{ animation: 'fade', animationDuration: 320 }} />
       <Stack.Screen name="activity" options={{ animation: 'fade', animationDuration: 320 }} />
       <Stack.Screen name="join-household" />

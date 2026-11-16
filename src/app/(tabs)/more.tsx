@@ -7,9 +7,8 @@ import { useHousehold } from '@/lib/household-context';
 const LINKS: { route: string; title: string; hint: string; module?: string }[] = [
   { route: '/household', title: 'Household settings', hint: 'Members, invites and modules' },
   { route: '/tasks', title: 'Tasks and responsibilities', hint: 'Assign, claim and track chores', module: 'tasks' },
-  { route: '/bills', title: 'Utility bills', hint: 'Due dates, reminders and history', module: 'bills' },
+  { route: '/bills', title: 'Bills & reminders', hint: 'Due dates, events and history', module: 'bills' },
   { route: '/polls', title: 'Polls and decisions', hint: 'Vote on shared choices', module: 'polls' },
-  { route: '/calendar', title: 'Calendar', hint: 'Deadlines and events in one view', module: 'calendar' },
   { route: '/announcements', title: 'Announcements', hint: 'News from admins', module: 'announcements' },
   { route: '/activity', title: 'Activity history', hint: 'Everything that happened' },
   { route: '/reports', title: 'Reports', hint: 'Spending, meals and tasks' },

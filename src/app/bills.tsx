@@ -9,12 +9,21 @@ import { currencySymbol, formatMoney } from '@/lib/finance';
 import { db } from '@/lib/firebase';
 import type { Bill } from '@/lib/models';
 
+interface CalEvent {
+  id: string;
+  title: string;
+  date: number;
+  note?: string;
+  createdBy?: string;
+}
+
 export default function BillsScreen() {
   const p = usePalette();
   const { user } = useAuth();
   const { active, members, logActivity } = useHousehold();
   const hid = active?.id ?? '';
   const { items: bills } = useCollection<Bill>(`households/${hid}/bills`, [], !!hid);
+  const { items: events } = useCollection<CalEvent>(`households/${hid}/events`, [], !!hid);
 
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
@@ -23,6 +32,9 @@ export default function BillsScreen() {
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [eventError, setEventError] = useState('');
 
   async function run(key: string, fn: () => Promise<void>) {
     if (busy) return;
@@ -75,6 +87,33 @@ export default function BillsScreen() {
     setShowForm(false);
   }
 
+  async function addEvent() {
+    if (!user) return;
+    if (!eventTitle.trim()) {
+      setEventError('Name the event first.');
+      return;
+    }
+    if (!eventDate.trim()) {
+      setEventError('Pick a date (YYYY-MM-DD).');
+      return;
+    }
+    const ts = new Date(`${eventDate.trim()}T12:00:00`).getTime();
+    if (Number.isNaN(ts)) {
+      setEventError('That date does not look valid. Use YYYY-MM-DD.');
+      return;
+    }
+    setEventError('');
+    await addDoc(collection(db, 'households', hid, 'events'), {
+      title: eventTitle.trim(),
+      date: ts,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+    });
+    await logActivity('calendar', `${user.displayName ?? 'Someone'} added event: ${eventTitle.trim()}`);
+    setEventTitle('');
+    setEventDate('');
+  }
+
   async function markPaid(b: Bill) {
     await updateDoc(doc(db, 'households', hid, 'bills', b.id), { status: 'paid' });
     if (user && b.amount > 0) {
@@ -100,8 +139,8 @@ export default function BillsScreen() {
     <Screen style={{ padding: 0 }}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
         <BackButton />
-        <Title>Utility bills</Title>
-        <Subtitle>Never miss a due date. Paying a bill can post it as a shared expense.</Subtitle>
+        <Title>Bills & reminders</Title>
+        <Subtitle>Due dates and events in one place. Paying a bill can post it as a shared expense.</Subtitle>
 
         <SectionTitle>Upcoming</SectionTitle>
         {sorted.filter((b) => b.status !== 'paid').length === 0 ? (
@@ -148,6 +187,47 @@ export default function BillsScreen() {
               </Card>
             ))
         )}
+
+        <SectionTitle>Events</SectionTitle>
+        {events.filter((e) => e.date >= Date.now() - 86400000).length === 0 ? (
+          <EmptyState title="Nothing coming up" hint="Add landlord visits, move-out dates and the like here." />
+        ) : (
+          events
+            .filter((e) => e.date >= Date.now() - 86400000)
+            .sort((a, b) => a.date - b.date)
+            .map((e) => (
+              <Card key={e.id}>
+                <Row>
+                  <Text style={{ flex: 1, fontWeight: '700', color: p.ink }} numberOfLines={1}>{e.title}</Text>
+                  <Text style={{ fontSize: 13, color: p.muted }}>
+                    {new Date(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </Text>
+                </Row>
+              </Card>
+            ))
+        )}
+        <Card style={{ marginTop: 10 }}>
+          <Field
+            label="Event title"
+            value={eventTitle}
+            onChangeText={(v) => {
+              setEventError('');
+              setEventTitle(v);
+            }}
+            placeholder="Landlord visit"
+          />
+          <Field
+            label="Date (YYYY-MM-DD)"
+            value={eventDate}
+            onChangeText={(v) => {
+              setEventError('');
+              setEventDate(v);
+            }}
+            placeholder="2026-07-20"
+          />
+          {eventError ? <Text style={{ color: p.danger, fontSize: 13, marginBottom: 8 }}>{eventError}</Text> : null}
+          <Button label="Add event" onPress={() => run('event', addEvent)} variant="ghost" loading={busy === 'event'} />
+        </Card>
 
         <SectionTitle>New bill</SectionTitle>
         <Button label={showForm ? 'Close' : 'Add bill'} onPress={() => setShowForm(!showForm)} variant={showForm ? 'ghost' : 'primary'} />

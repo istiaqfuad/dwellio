@@ -28,7 +28,6 @@ const MODULE_LABELS: { key: keyof HouseholdModules; label: string }[] = [
   { key: 'meals', label: 'Meals' },
   { key: 'groceries', label: 'Groceries' },
   { key: 'tasks', label: 'Tasks' },
-  { key: 'calendar', label: 'Calendar' },
   { key: 'bills', label: 'Bills' },
   { key: 'polls', label: 'Polls' },
   { key: 'announcements', label: 'Announcements' },

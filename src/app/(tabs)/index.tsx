@@ -193,7 +193,9 @@ export default function DashboardScreen() {
   const upLoading = assignmentsLoading || billsLoading || settlementsLoading;
   const mine = balances.find((b) => b.uid === user?.uid);
   const openTasks = tasks.filter((t) => t.status !== 'completed' && t.status !== 'cancelled');
-  const pinned = announcements.filter((a) => a.pinned).slice(0, 2);
+  const latestAnnouncements = [...announcements]
+    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.createdAt - a.createdAt)
+    .slice(0, 3);
   const recent = [...activity].sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt)).slice(0, 6);
   const nameOf = (uid: string) => members.find((m) => m.id === uid)?.displayName ?? 'Member';
 
@@ -493,21 +495,37 @@ export default function DashboardScreen() {
           </>
         )}
 
-        {(pinned.length > 0 || announcementsLoading) && (
+        {(latestAnnouncements.length > 0 || announcementsLoading) && (
           <>
-            <SectionTitle>Pinned</SectionTitle>
-            {announcementsLoading && pinned.length === 0 ? (
+            <SectionTitle>Announcements</SectionTitle>
+            {announcementsLoading && latestAnnouncements.length === 0 ? (
               <Card>
                 <Skeleton height={18} />
                 <Skeleton height={14} width="80%" />
               </Card>
             ) : (
-            pinned.map((a) => (
-              <Card key={a.id} style={{ borderColor: p.accent }}>
-                <Text style={{ fontWeight: '700', color: p.ink }}>{a.title}</Text>
-                <Text style={{ fontSize: 13, color: p.muted }} numberOfLines={2}>{a.message}</Text>
-              </Card>
-            ))
+            <>
+              {latestAnnouncements.map((a) => (
+                <Link key={a.id} href="/announcements" asChild>
+                  <Pressable>
+                    <Card style={a.pinned ? { borderColor: p.accent } : undefined}>
+                      <Row gap={8}>
+                        <Text style={{ flex: 1, fontWeight: '700', color: p.ink }} numberOfLines={1}>{a.title}</Text>
+                        {a.pinned ? (
+                          <Text style={{ fontSize: 12, color: p.accent, fontWeight: '700' }}>Pinned</Text>
+                        ) : null}
+                      </Row>
+                      <Text style={{ fontSize: 13, color: p.muted }} numberOfLines={2}>{a.message}</Text>
+                    </Card>
+                  </Pressable>
+                </Link>
+              ))}
+              <Link href="/announcements" asChild>
+                <Pressable style={{ marginTop: 10, alignItems: 'center' }}>
+                  <Text style={{ color: p.primary, fontWeight: '600', fontSize: 13 }}>Open announcements ›</Text>
+                </Pressable>
+              </Link>
+            </>
             )}
           </>
         )}
