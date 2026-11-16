@@ -50,7 +50,12 @@ export default function GroceriesScreen() {
   }
 
   const ensuredRef = useRef('');
-  const shared = lists.find((l) => l.kind === 'shared');
+  // Oldest first so the pick is stable even if a household ever ends up with
+  // more than one shared list. `find` on an unordered snapshot could flip
+  // between duplicates and scatter ticks across lists.
+  const shared = lists
+    .filter((l) => l.kind === 'shared')
+    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0];
 
   async function ensureShared() {
     if (shared || !user) return shared?.id ?? '';

@@ -112,7 +112,11 @@ export default function DashboardScreen() {
     [],
     !!hid && !!active?.modules.groceries,
   );
-  const sharedList = groceryLists.find((l) => l.kind === 'shared');
+  // Oldest first so the pick is stable even if a household ever ends up with
+  // more than one shared list (see groceries screen).
+  const sharedList = groceryLists
+    .filter((l) => l.kind === 'shared')
+    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0];
   const { items: sharedItems, loading: sharedItemsLoading } = useCollection<GroceryItem>(
     `households/${hid}/lists/${sharedList?.id ?? 'none'}/items`,
     [],
