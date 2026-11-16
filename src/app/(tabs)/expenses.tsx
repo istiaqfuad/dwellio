@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import {
   addDoc,
   collection,
@@ -204,38 +204,28 @@ export default function ExpensesScreen() {
         <Subtitle>Shared costs, split fairly. Balances update right away.</Subtitle>
 
         {isAdmin ? (
-          <Card>
-            <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>Payment confirmation</Text>
-            <Text style={{ fontSize: 13, color: p.muted, marginTop: 2 }}>
-              {requireConfirm ? 'The receiver confirms every payment.' : 'Payments complete right away.'}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-              {([true, false] as const).map((on) => {
-                const selected = requireConfirm === on;
-                return (
-                  <Pressable
-                    key={String(on)}
-                    onPress={() => {
-                      if (selected) return;
-                      setPolicyLocal(on);
-                      run('policy', () => togglePolicy(on));
-                    }}
-                    style={{
-                      paddingVertical: 7,
-                      paddingHorizontal: 14,
-                      borderRadius: 16,
-                      borderWidth: 1,
-                      borderColor: selected ? p.primary : p.line,
-                      backgroundColor: selected ? `${p.primary}1F` : 'transparent',
-                      opacity: busy === 'policy' ? 0.5 : 1,
-                    }}>
-                    <Text style={{ color: selected ? p.primary : p.ink, fontWeight: '600', fontSize: 13 }}>
-                      {on ? 'On' : 'Off'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+          <Card style={{ marginTop: 12 }}>
+            <Row gap={12}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>Payment confirmation</Text>
+                <Text style={{ fontSize: 13, color: p.muted, marginTop: 2 }}>
+                  {requireConfirm ? 'The receiver confirms every payment.' : 'Payments complete right away.'}
+                </Text>
+              </View>
+              <Switch
+                value={requireConfirm}
+                disabled={busy === 'policy'}
+                onValueChange={(next) => {
+                  if (busy) return;
+                  setPolicyLocal(next);
+                  run('policy', () => togglePolicy(next));
+                }}
+                trackColor={{ false: p.line, true: p.primary }}
+                thumbColor={requireConfirm ? p.primaryInk : p.muted}
+                ios_backgroundColor={p.line}
+                style={{ opacity: busy === 'policy' ? 0.5 : 1 }}
+              />
+            </Row>
           </Card>
         ) : null}
 
