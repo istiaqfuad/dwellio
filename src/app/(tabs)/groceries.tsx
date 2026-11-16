@@ -355,7 +355,7 @@ export default function GroceriesScreen() {
               <Button label="Add" onPress={() => run('add', addItem)} loading={busy === 'add'} />
               <Text style={{ height: 8 }} />
               {!groceriesClosed && (
-                <Button label="Record purchase" onPress={() => setRecordFor(openList)} variant="ghost" />
+                <Button label={recordFor ? 'Close' : 'Record purchase'} onPress={() => setRecordFor(recordFor ? '' : openList)} variant="ghost" />
               )}
             </Card>
           </View>

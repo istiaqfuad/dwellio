@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -118,7 +118,24 @@ export default function DashboardScreen() {
     [],
     !!hid && !!sharedList,
   );
-  const remainingGroceries = sharedItems.filter((i) => !i.purchased);
+  // Instant tick feedback, same as the groceries screen: hide the item locally
+  // on tap. The server snapshot confirms a moment later and clears this.
+  const [tickedLocal, setTickedLocal] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    setTickedLocal((prev) => {
+      if (Object.keys(prev).length === 0) return prev;
+      let changed = false;
+      const next = { ...prev };
+      for (const it of sharedItems) {
+        if (it.id in next && it.purchased === next[it.id]) {
+          delete next[it.id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [sharedItems]);
+  const remainingGroceries = sharedItems.filter((i) => !(tickedLocal[i.id] ?? i.purchased));
   const [busy, setBusy] = useState<string | null>(null);
 
   async function run(key: string, fn: () => Promise<void>) {
@@ -131,10 +148,10 @@ export default function DashboardScreen() {
     }
   }
 
-  async function toggleGrocery(item: GroceryItem) {
+  async function toggleGrocery(item: GroceryItem, next: boolean) {
     if (!sharedList) return;
     await updateDoc(doc(db, 'households', hid, 'lists', sharedList.id, 'items', item.id), {
-      purchased: !item.purchased,
+      purchased: next,
     });
   }
 
@@ -355,7 +372,11 @@ export default function DashboardScreen() {
                 remainingGroceries.slice(0, 5).map((g) => (
                   <Pressable
                     key={g.id}
-                    onPress={() => run(`grocery-${g.id}`, () => toggleGrocery(g))}
+                    onPress={() => {
+                      const next = !(tickedLocal[g.id] ?? g.purchased);
+                      setTickedLocal((prev) => ({ ...prev, [g.id]: next }));
+                      run(`grocery-${g.id}`, () => toggleGrocery(g, next));
+                    }}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: g.purchased }}
                     accessibilityLabel={`Tick off ${g.name}`}
