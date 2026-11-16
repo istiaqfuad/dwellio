@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { addDoc, collection, deleteDoc, doc, getDocs, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { BackButton, Button, Card, EmptyState, Field, Row, Screen, SectionTitle, Subtitle, Title, Toggle, usePalette } from '@/components/ui';
+import { Button, Card, EmptyState, Field, Row, Screen, SectionTitle, Subtitle, Title, Toggle, usePalette } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
 import { useHousehold } from '@/lib/household-context';
 import { useCollection } from '@/lib/use-collection';
@@ -245,8 +245,7 @@ export default function GroceriesScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 112 }}>
-        <BackButton />
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 32, paddingBottom: 112 }}>
         <Title>Groceries</Title>
         <Subtitle>One shared list for the household. Tick items off while shopping, then record what was spent.</Subtitle>
         <Text style={{ height: 12 }} />

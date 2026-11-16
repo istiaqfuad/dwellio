@@ -7,7 +7,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore';
-import { BackButton, Button, Card, EmptyState, Field, Row, ListRow, Screen, SectionTitle, Subtitle, Title, usePalette } from '@/components/ui';
+import { Button, Card, EmptyState, Field, Row, ListRow, Screen, SectionTitle, Subtitle, Title, usePalette } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
 import { useHousehold } from '@/lib/household-context';
 import { useCollection } from '@/lib/use-collection';
@@ -198,8 +198,7 @@ export default function ExpensesScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 112 }}>
-        <BackButton />
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 32, paddingBottom: 112 }}>
         <Title>Expenses</Title>
         <Subtitle>Shared costs, split fairly. Balances update right away.</Subtitle>
 

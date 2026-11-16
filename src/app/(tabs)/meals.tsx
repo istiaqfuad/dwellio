@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { addDoc, collection, deleteDoc, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { BackButton, Button, Card, EmptyState, Field, ListRow, Row, Screen, SectionTitle, Subtitle, Title, Toggle, usePalette } from '@/components/ui';
+import { Button, Card, EmptyState, Field, ListRow, Row, Screen, SectionTitle, Subtitle, Title, Toggle, usePalette } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
 import { useHousehold } from '@/lib/household-context';
 import { useCollection } from '@/lib/use-collection';
@@ -605,8 +605,7 @@ export default function MealsScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 112 }}>
-        <BackButton />
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: 32, paddingBottom: 112 }}>
         <Title>Meals</Title>
         <Subtitle>Everyone is in by default. Opt out when you skip.</Subtitle>
         <Text style={{ height: 12 }} />
