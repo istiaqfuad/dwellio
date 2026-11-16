@@ -391,7 +391,7 @@ export default function HouseholdScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
         <BackButton />
         <Card>
           <Row gap={12}>

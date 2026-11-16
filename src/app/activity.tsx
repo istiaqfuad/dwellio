@@ -44,12 +44,12 @@ export default function ActivityScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
         <BackButton />
         <Title>Activity</Title>
         <Subtitle>Auditable history of what changed and who did it.</Subtitle>
         <SectionTitle>Type</SectionTitle>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false}>
           <Row gap={8}>
             {KINDS.map((k) => (
               <Pressable
@@ -62,7 +62,7 @@ export default function ActivityScreen() {
           </Row>
         </ScrollView>
         <SectionTitle>Member</SectionTitle>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false}>
           <Row gap={8}>
             <Pressable
               onPress={() => setWho('all')}

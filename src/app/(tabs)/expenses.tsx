@@ -198,7 +198,7 @@ export default function ExpensesScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 112 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 112 }}>
         <BackButton />
         <Title>Expenses</Title>
         <Subtitle>Shared costs, split fairly. Balances update right away.</Subtitle>
@@ -433,7 +433,7 @@ export default function ExpensesScreen() {
               placeholder="0.00"
             />
             <Text style={{ fontSize: 13, fontWeight: '600', color: p.muted, marginBottom: 6 }}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
               <Row gap={8}>
                 {categories.map((c) => (
                   <Pressable
@@ -451,7 +451,7 @@ export default function ExpensesScreen() {
               </Text>
             ) : null}
             <Text style={{ fontSize: 13, fontWeight: '600', color: p.muted, marginBottom: 6 }}>Payer</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
               <Row gap={8}>
                 {members.map((m) => (
                   <Pressable

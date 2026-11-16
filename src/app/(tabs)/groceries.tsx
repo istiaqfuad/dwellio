@@ -245,7 +245,7 @@ export default function GroceriesScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 112 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 112 }}>
         <BackButton />
         <Title>Groceries</Title>
         <Subtitle>One shared list for the household. Tick items off while shopping, then record what was spent.</Subtitle>

@@ -60,7 +60,7 @@ export default function JoinHouseholdScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 32 }}>
         <BackButton />
         <Text style={{ fontSize: 15, fontWeight: '700', color: p.primary, marginTop: 32 }}>JOIN</Text>
         <Title>Have an invite code?</Title>

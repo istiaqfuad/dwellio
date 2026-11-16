@@ -29,7 +29,7 @@ export default function MoreScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 112 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 112 }}>
         <Pressable
           onPress={() => router.push('/profile' as never)}
           style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }]}>

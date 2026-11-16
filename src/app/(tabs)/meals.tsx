@@ -605,7 +605,7 @@ export default function MealsScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 112 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 112 }}>
         <BackButton />
         <Title>Meals</Title>
         <Subtitle>Everyone is in by default. Opt out when you skip.</Subtitle>

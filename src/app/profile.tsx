@@ -40,7 +40,7 @@ export default function ProfileScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
         <BackButton />
         <Title>Profile</Title>
         <Subtitle>{user?.email ?? ''}</Subtitle>

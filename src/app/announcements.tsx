@@ -107,7 +107,7 @@ export default function AnnouncementsScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
         <BackButton />
         <Title>Announcements</Title>
         <Subtitle>Important news, pinned where everyone sees it.</Subtitle>

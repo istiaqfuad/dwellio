@@ -98,7 +98,7 @@ export default function BillsScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
         <BackButton />
         <Title>Utility bills</Title>
         <Subtitle>Never miss a due date. Paying a bill can post it as a shared expense.</Subtitle>

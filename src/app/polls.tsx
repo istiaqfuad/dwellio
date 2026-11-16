@@ -81,7 +81,7 @@ export default function PollsScreen() {
 
   return (
     <Screen style={{ padding: 0 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 64 }}>
         <BackButton />
         <Title>Polls</Title>
         <Subtitle>Settle debates with a vote, not a group chat flood.</Subtitle>
