@@ -50,7 +50,6 @@ export default function ExpensesScreen() {
   const [custom, setCustom] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState('');
   const [dispute, setDispute] = useState('');
-  const [settleFor, setSettleFor] = useState('');
   const [suggestFor, setSuggestFor] = useState<number | null>(null);
   const [suggestAmt, setSuggestAmt] = useState('');
   const [suggestTo, setSuggestTo] = useState('');
@@ -83,7 +82,7 @@ export default function ExpensesScreen() {
 
   function paymentError(amountVal: number): string | null {
     if (!user || !active) return 'Not ready yet. Try again in a moment.';
-    if (requireConfirm && myPending) return 'Wait for your pending payment to be confirmed first.';
+    if (myPending) return 'Wait for your pending payment to be confirmed first.';
     if (myOwed <= 0) return 'Nothing for you to pay right now.';
     if (amountVal - myOwed > 0.005) return `You only owe ${formatMoney(myOwed, active.currency)}.`;
     return null;
@@ -167,6 +166,7 @@ export default function ExpensesScreen() {
 
   async function recordSettlement(to: string, amountVal: number) {
     if (!user || !active) return;
+    if (myPending) return;
     if (paymentError(amountVal)) return;
     const status = requireConfirm ? 'pending' : 'completed';
     await addDoc(collection(db, 'households', hid, 'settlements'), {
@@ -257,7 +257,7 @@ export default function ExpensesScreen() {
                   <Text style={{ height: 8 }} />
                   {!isPayer ? (
                     <Text style={{ fontSize: 13, color: p.muted }}>Waiting for {nameOf(s.from)} to pay.</Text>
-                  ) : requireConfirm && myPending ? (
+                  ) : myPending ? (
                     <Text style={{ fontSize: 13, color: p.muted }}>
                       Payment of {formatMoney(myPending.amount, active.currency)} to {nameOf(myPending.receiverId)} is waiting for confirmation.
                     </Text>
@@ -337,14 +337,13 @@ export default function ExpensesScreen() {
                     </>
                   ) : (
                     <Button
-                      label="Record payment"
+                      label={`Pay ${formatMoney(s.amount, active.currency)}`}
                       onPress={() => {
                         setSuggestAmt(String(s.amount));
                         setSuggestTo(s.to);
                         setSuggestError('');
                         setSuggestFor(i);
                       }}
-                      variant="ghost"
                     />
                   )}
                 </Card>
@@ -353,7 +352,7 @@ export default function ExpensesScreen() {
           </>
         )}
 
-        <SectionTitle>Record a settlement</SectionTitle>
+        <SectionTitle>Settlements</SectionTitle>
         <Card>
           <Text style={{ color: p.muted, fontSize: 13, marginBottom: 8 }}>
             Policy: {requireConfirm ? 'payments stay pending until the receiver confirms them.' : 'payments complete right away.'}
@@ -393,30 +392,12 @@ export default function ExpensesScreen() {
               ))}
             </View>
           )}
-          {requireConfirm && myPending ? (
+          {myPending ? (
             <Text style={{ color: p.muted, fontSize: 13 }}>
-              Your payment of {formatMoney(myPending.amount, active.currency)} to {nameOf(myPending.receiverId)} is waiting for confirmation. You can pay again after it is confirmed.
+              Your payment of {formatMoney(myPending.amount, active.currency)} to {nameOf(myPending.receiverId)} is waiting for confirmation. You can pay again after it is confirmed or rejected.
             </Text>
           ) : !userOwes && !balancesLoading ? (
             <Text style={{ color: p.muted, fontSize: 13 }}>Nothing for you to pay right now.</Text>
-          ) : (
-            members
-              .filter((m) => m.id !== user?.uid)
-              .map((m) => (
-                <ListRow key={m.id}>
-                  <Text style={{ flex: 1, color: p.ink }}>{m.displayName}</Text>
-                  {settleFor === m.id ? (
-                    <Button label="Cancel" onPress={() => setSettleFor('')} variant="ghost" size="sm" />
-                  ) : (
-                    <Button label="Pay" onPress={() => setSettleFor(m.id)} size="sm" />
-                  )}
-                </ListRow>
-              ))
-          )}
-          {settleFor && !(requireConfirm && myPending) ? (
-            <View style={{ marginTop: 8 }}>
-              <SettleButton to={settleFor} currency={currencySymbol(active.currency)} owed={myOwed} onDone={() => setSettleFor('')} onRecord={recordSettlement} />
-            </View>
           ) : null}
         </Card>
 
@@ -631,70 +612,5 @@ export default function ExpensesScreen() {
         )}
       </ScrollView>
     </Screen>
-  );
-}
-
-function SettleButton({
-  to,
-  currency,
-  owed,
-  onRecord,
-  onDone,
-}: {
-  to: string;
-  currency: string;
-  owed: number;
-  onRecord: (to: string, amount: number) => Promise<void>;
-  onDone: () => void;
-}) {
-  const p = usePalette();
-  const [val, setVal] = useState('');
-  const [sending, setSending] = useState(false);
-  const [settleError, setSettleError] = useState('');
-  return (
-    <View>
-      <Text style={{ fontSize: 13, color: p.muted, marginBottom: 6 }}>
-        You owe {formatMoney(owed, currency)} now.
-      </Text>
-      <Field
-        label={`Pay (${currency})`}
-        value={val}
-        onChangeText={(v) => {
-          setSettleError('');
-          setVal(v);
-        }}
-        keyboardType="decimal-pad"
-        placeholder="0.00"
-      />
-      {settleError ? <Text style={{ color: p.danger, fontSize: 13, marginBottom: 8 }}>{settleError}</Text> : null}
-      <Button
-        label="Confirm"
-        loading={sending}
-        onPress={async () => {
-          if (sending) return;
-          const n = parseFloat(val);
-          if (Number.isNaN(n) || n <= 0) {
-            setSettleError('Enter the amount being paid.');
-            return;
-          }
-          if (owed <= 0) {
-            setSettleError('Nothing for you to pay right now.');
-            return;
-          }
-          if (n - owed > 0.005) {
-            setSettleError(`You only owe ${formatMoney(owed, currency)}.`);
-            return;
-          }
-          setSending(true);
-          try {
-            await onRecord(to, n);
-            setVal('');
-            onDone();
-          } finally {
-            setSending(false);
-          }
-        }}
-      />
-    </View>
   );
 }
