@@ -69,6 +69,20 @@ export default function ExpensesScreen() {
   const nameOf = (uid: string) => members.find((m) => m.id === uid)?.displayName ?? 'Member';
   const sorted = useMemo(() => [...expenses].sort((a, b) => b.date - a.date).slice(0, 60), [expenses]);
   const pendingSettlements = settlements.filter((s) => s.status === 'pending');
+  const requireConfirm = (active?.settlementPolicy ?? 'receiver') === 'receiver';
+  const myPending = pendingSettlements.find((s) => s.payerId === user?.uid);
+  const myOwed = (() => {
+    const mine = balances.find((b) => b.uid === user?.uid);
+    return mine && mine.net < 0 ? -mine.net : 0;
+  })();
+
+  function paymentError(amountVal: number): string | null {
+    if (!user || !active) return 'Not ready yet. Try again in a moment.';
+    if (requireConfirm && myPending) return 'Wait for your pending payment to be confirmed first.';
+    if (myOwed <= 0) return 'Nothing for you to pay right now.';
+    if (amountVal - myOwed > 0.005) return `You only owe ${formatMoney(myOwed, active.currency)}.`;
+    return null;
+  }
   const balancesLoading = expensesLoading || settlementsLoading;
   const userOwes = suggestions.some((s) => s.from === user?.uid);
 
@@ -148,16 +162,30 @@ export default function ExpensesScreen() {
 
   async function recordSettlement(to: string, amountVal: number) {
     if (!user || !active) return;
+    if (paymentError(amountVal)) return;
+    const status = requireConfirm ? 'pending' : 'completed';
     await addDoc(collection(db, 'households', hid, 'settlements'), {
       payerId: user.uid,
       receiverId: to,
       amount: amountVal,
       date: Date.now(),
-      status: 'pending',
+      status,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
     });
-    await logActivity('settlement', `${user.displayName ?? 'Someone'} recorded a payment of ${formatMoney(amountVal, active.currency)} to ${nameOf(to)} (waiting for confirmation)`);
+    await logActivity(
+      'settlement',
+      requireConfirm
+        ? `${user.displayName ?? 'Someone'} recorded a payment of ${formatMoney(amountVal, active.currency)} to ${nameOf(to)} (waiting for confirmation)`
+        : `${user.displayName ?? 'Someone'} paid ${formatMoney(amountVal, active.currency)} to ${nameOf(to)}`,
+    );
+  }
+
+  async function togglePolicy() {
+    if (!active) return;
+    const next = requireConfirm ? 'immediate' : 'receiver';
+    await updateDoc(doc(db, 'households', hid), { settlementPolicy: next });
+    await logActivity('settings', `Turned payment confirmation ${next === 'receiver' ? 'on' : 'off'}`);
   }
 
   async function settleStatus(s: Settlement, status: 'completed' | 'rejected') {
@@ -170,6 +198,28 @@ export default function ExpensesScreen() {
         <BackButton />
         <Title>Expenses</Title>
         <Subtitle>Shared costs, split fairly. Balances update right away.</Subtitle>
+
+        {isAdmin ? (
+          <Card>
+            <Row>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>
+                  Payment confirmation {requireConfirm ? 'on' : 'off'}
+                </Text>
+                <Text style={{ fontSize: 13, color: p.muted }}>
+                  {requireConfirm ? 'The receiver confirms every payment.' : 'Payments complete right away.'}
+                </Text>
+              </View>
+              <Button
+                label={requireConfirm ? 'Turn off' : 'Turn on'}
+                onPress={() => run('policy', togglePolicy)}
+                variant={requireConfirm ? 'ghost' : 'primary'}
+                size="sm"
+                loading={busy === 'policy'}
+              />
+            </Row>
+          </Card>
+        ) : null}
 
         <SectionTitle>Balances</SectionTitle>
         <Card>
@@ -199,6 +249,10 @@ export default function ExpensesScreen() {
                   <Text style={{ height: 8 }} />
                   {!isPayer ? (
                     <Text style={{ fontSize: 13, color: p.muted }}>Waiting for {nameOf(s.from)} to pay.</Text>
+                  ) : requireConfirm && myPending ? (
+                    <Text style={{ fontSize: 13, color: p.muted }}>
+                      Payment of {formatMoney(myPending.amount, active.currency)} to {nameOf(myPending.receiverId)} is waiting for confirmation.
+                    </Text>
                   ) : suggestFor === i ? (
                     <>
                       <Text style={{ fontSize: 13, fontWeight: '600', color: p.muted, marginBottom: 6 }}>Pay to</Text>
@@ -221,6 +275,9 @@ export default function ExpensesScreen() {
                             </Pressable>
                           ))}
                       </View>
+                      <Text style={{ fontSize: 13, color: p.muted, marginBottom: 6 }}>
+                        You owe {formatMoney(myOwed, active.currency)} now.
+                      </Text>
                       <Field
                         label={`Amount to pay ${nameOf(suggestTo || s.to)} (${currencySymbol(active.currency)})`}
                         value={suggestAmt}
@@ -235,11 +292,16 @@ export default function ExpensesScreen() {
                       <Row gap={8}>
                         <View style={{ flex: 1 }}>
                           <Button
-                            label="Confirm payment"
+                            label="Confirm"
                             onPress={() => {
                               const n = parseFloat(suggestAmt);
                               if (Number.isNaN(n) || n <= 0) {
                                 setSuggestError('Enter the amount being paid.');
+                                return;
+                              }
+                              const err = paymentError(n);
+                              if (err) {
+                                setSuggestError(err);
                                 return;
                               }
                               const to = suggestTo && suggestTo !== user?.uid ? suggestTo : s.to;
@@ -286,7 +348,7 @@ export default function ExpensesScreen() {
         <SectionTitle>Record a settlement</SectionTitle>
         <Card>
           <Text style={{ color: p.muted, fontSize: 13, marginBottom: 8 }}>
-            Policy: payments stay pending until the receiver confirms them.
+            Policy: {requireConfirm ? 'payments stay pending until the receiver confirms them.' : 'payments complete right away.'}
           </Text>
           {pendingSettlements.length > 0 && (
             <View style={{ marginBottom: 10 }}>
@@ -323,7 +385,11 @@ export default function ExpensesScreen() {
               ))}
             </View>
           )}
-          {!userOwes && !balancesLoading ? (
+          {requireConfirm && myPending ? (
+            <Text style={{ color: p.muted, fontSize: 13 }}>
+              Your payment of {formatMoney(myPending.amount, active.currency)} to {nameOf(myPending.receiverId)} is waiting for confirmation. You can pay again after it is confirmed.
+            </Text>
+          ) : !userOwes && !balancesLoading ? (
             <Text style={{ color: p.muted, fontSize: 13 }}>Nothing for you to pay right now.</Text>
           ) : (
             members
@@ -339,9 +405,9 @@ export default function ExpensesScreen() {
                 </ListRow>
               ))
           )}
-          {settleFor ? (
+          {settleFor && !(requireConfirm && myPending) ? (
             <View style={{ marginTop: 8 }}>
-              <SettleButton to={settleFor} currency={currencySymbol(active.currency)} onDone={() => setSettleFor('')} onRecord={recordSettlement} />
+              <SettleButton to={settleFor} currency={currencySymbol(active.currency)} owed={myOwed} onDone={() => setSettleFor('')} onRecord={recordSettlement} />
             </View>
           ) : null}
         </Card>
@@ -563,11 +629,13 @@ export default function ExpensesScreen() {
 function SettleButton({
   to,
   currency,
+  owed,
   onRecord,
   onDone,
 }: {
   to: string;
   currency: string;
+  owed: number;
   onRecord: (to: string, amount: number) => Promise<void>;
   onDone: () => void;
 }) {
@@ -577,6 +645,9 @@ function SettleButton({
   const [settleError, setSettleError] = useState('');
   return (
     <View>
+      <Text style={{ fontSize: 13, color: p.muted, marginBottom: 6 }}>
+        You owe {formatMoney(owed, currency)} now.
+      </Text>
       <Field
         label={`Pay (${currency})`}
         value={val}
@@ -589,13 +660,21 @@ function SettleButton({
       />
       {settleError ? <Text style={{ color: p.danger, fontSize: 13, marginBottom: 8 }}>{settleError}</Text> : null}
       <Button
-        label="Confirm payment"
+        label="Confirm"
         loading={sending}
         onPress={async () => {
           if (sending) return;
           const n = parseFloat(val);
           if (Number.isNaN(n) || n <= 0) {
             setSettleError('Enter the amount being paid.');
+            return;
+          }
+          if (owed <= 0) {
+            setSettleError('Nothing for you to pay right now.');
+            return;
+          }
+          if (n - owed > 0.005) {
+            setSettleError(`You only owe ${formatMoney(owed, currency)}.`);
             return;
           }
           setSending(true);
