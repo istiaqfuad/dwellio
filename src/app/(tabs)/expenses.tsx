@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import {
   addDoc,
@@ -69,7 +69,12 @@ export default function ExpensesScreen() {
   const nameOf = (uid: string) => members.find((m) => m.id === uid)?.displayName ?? 'Member';
   const sorted = useMemo(() => [...expenses].sort((a, b) => b.date - a.date).slice(0, 60), [expenses]);
   const pendingSettlements = settlements.filter((s) => s.status === 'pending');
-  const requireConfirm = (active?.settlementPolicy ?? 'receiver') === 'receiver';
+  // Optimistic policy flip: pills react on tap, the server value confirms after.
+  const [policyLocal, setPolicyLocal] = useState<boolean | null>(null);
+  useEffect(() => {
+    setPolicyLocal(null);
+  }, [active?.settlementPolicy]);
+  const requireConfirm = policyLocal ?? (active?.settlementPolicy ?? 'receiver') === 'receiver';
   const myPending = pendingSettlements.find((s) => s.payerId === user?.uid);
   const myOwed = (() => {
     const mine = balances.find((b) => b.uid === user?.uid);
@@ -181,11 +186,10 @@ export default function ExpensesScreen() {
     );
   }
 
-  async function togglePolicy() {
+  async function togglePolicy(next: boolean) {
     if (!active) return;
-    const next = requireConfirm ? 'immediate' : 'receiver';
-    await updateDoc(doc(db, 'households', hid), { settlementPolicy: next });
-    await logActivity('settings', `Turned payment confirmation ${next === 'receiver' ? 'on' : 'off'}`);
+    await updateDoc(doc(db, 'households', hid), { settlementPolicy: next ? 'receiver' : 'immediate' });
+    await logActivity('settings', `Turned payment confirmation ${next ? 'on' : 'off'}`);
   }
 
   async function settleStatus(s: Settlement, status: 'completed' | 'rejected') {
@@ -201,23 +205,37 @@ export default function ExpensesScreen() {
 
         {isAdmin ? (
           <Card>
-            <Row>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>
-                  Payment confirmation {requireConfirm ? 'on' : 'off'}
-                </Text>
-                <Text style={{ fontSize: 13, color: p.muted }}>
-                  {requireConfirm ? 'The receiver confirms every payment.' : 'Payments complete right away.'}
-                </Text>
-              </View>
-              <Button
-                label={requireConfirm ? 'Turn off' : 'Turn on'}
-                onPress={() => run('policy', togglePolicy)}
-                variant={requireConfirm ? 'ghost' : 'primary'}
-                size="sm"
-                loading={busy === 'policy'}
-              />
-            </Row>
+            <Text style={{ fontWeight: '700', color: p.ink, fontSize: 15 }}>Payment confirmation</Text>
+            <Text style={{ fontSize: 13, color: p.muted, marginTop: 2 }}>
+              {requireConfirm ? 'The receiver confirms every payment.' : 'Payments complete right away.'}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+              {([true, false] as const).map((on) => {
+                const selected = requireConfirm === on;
+                return (
+                  <Pressable
+                    key={String(on)}
+                    onPress={() => {
+                      if (selected) return;
+                      setPolicyLocal(on);
+                      run('policy', () => togglePolicy(on));
+                    }}
+                    style={{
+                      paddingVertical: 7,
+                      paddingHorizontal: 14,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: selected ? p.primary : p.line,
+                      backgroundColor: selected ? `${p.primary}1F` : 'transparent',
+                      opacity: busy === 'policy' ? 0.5 : 1,
+                    }}>
+                    <Text style={{ color: selected ? p.primary : p.ink, fontWeight: '600', fontSize: 13 }}>
+                      {on ? 'On' : 'Off'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </Card>
         ) : null}
 
