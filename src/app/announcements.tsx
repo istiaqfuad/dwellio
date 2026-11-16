@@ -1,5 +1,6 @@
+import { Feather } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { addDoc, arrayUnion, collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { BackButton, Button, Card, EmptyState, Field, Row, Screen, SectionTitle, Subtitle, Title, usePalette } from '@/components/ui';
 import { useAuth } from '@/lib/auth-context';
@@ -138,15 +139,25 @@ export default function AnnouncementsScreen() {
                 ) : null}
               </Row>
               <Text style={{ color: p.ink, marginTop: 6 }}>{a.message}</Text>
-              <Text style={{ height: 8 }} />
-              <Row gap={8}>
-                {user && !a.ackedBy.includes(user.uid) ? (
+              {user && !a.ackedBy.includes(user.uid) ? (
+                <View style={{ marginTop: 10, alignItems: 'flex-start' }}>
                   <Button label="Mark as read" onPress={() => run(`ack-${a.id}`, () => ack(a))} size="sm" loading={busy === `ack-${a.id}`} />
-                ) : null}
-                {a.commentsEnabled ? (
-                  <Button label={openComments === a.id ? 'Hide' : 'Discuss'} onPress={() => setOpenComments(openComments === a.id ? '' : a.id)} variant="ghost" size="sm" />
-                ) : null}
-              </Row>
+                </View>
+              ) : null}
+              {a.commentsEnabled ? (
+                <Pressable
+                  onPress={() => setOpenComments(openComments === a.id ? '' : a.id)}
+                  style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: p.line, flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ flex: 1, color: p.primary, fontWeight: '600', fontSize: 14 }}>
+                    {openComments === a.id ? 'Hide discussion' : 'Discuss'}
+                  </Text>
+                  <Feather
+                    name={openComments === a.id ? 'chevron-up' : 'chevron-down'}
+                    size={18}
+                    color={p.muted}
+                  />
+                </Pressable>
+              ) : null}
               {openComments === a.id && (
                 <View style={{ marginTop: 8 }}>
                   {comments.map((c) => (
