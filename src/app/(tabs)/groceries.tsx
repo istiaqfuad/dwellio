@@ -82,6 +82,24 @@ export default function GroceriesScreen() {
     [],
     !!openList,
   );
+  // Instant tick feedback: flip the checkbox locally on tap. The server
+  // snapshot confirms a moment later and clears the override. Without this,
+  // a slow snapshot echo leaves the tick invisible until the app reloads.
+  const [tickedLocal, setTickedLocal] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    setTickedLocal((prev) => {
+      if (Object.keys(prev).length === 0) return prev;
+      let changed = false;
+      const next = { ...prev };
+      for (const it of openItems) {
+        if (it.id in next && it.purchased === next[it.id]) {
+          delete next[it.id];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [openItems]);
   const remaining = useMemo(() => openItems.filter((i) => !i.purchased).length, [openItems]);
 
   if (!active) {
@@ -120,9 +138,9 @@ export default function GroceriesScreen() {
     setItemName('');
   }
 
-  async function togglePurchased(item: GroceryItem) {
+  async function togglePurchased(item: GroceryItem, next: boolean) {
     await updateDoc(doc(db, 'households', hid, 'lists', openList, 'items', item.id), {
-      purchased: !item.purchased,
+      purchased: next,
     });
   }
 
@@ -277,14 +295,20 @@ export default function GroceriesScreen() {
                 )}
               </Row>
               <Text style={{ height: 8 }} />
-              {openItems.map((item) => (
+              {openItems.map((item) => {
+                const ticked = tickedLocal[item.id] ?? item.purchased;
+                return (
                 <View key={item.id} style={{ marginBottom: 4 }}>
                   <Row gap={10}>
                     <Pressable
-                      onPress={() => run(`toggle-${item.id}`, () => togglePurchased(item))}
+                      onPress={() => {
+                        const next = !(tickedLocal[item.id] ?? item.purchased);
+                        setTickedLocal((prev) => ({ ...prev, [item.id]: next }));
+                        run(`toggle-${item.id}`, () => togglePurchased(item, next));
+                      }}
                       accessibilityRole="checkbox"
-                      accessibilityState={{ checked: item.purchased }}
-                      accessibilityLabel={`Mark ${item.name} as ${item.purchased ? 'not purchased' : 'purchased'}`}
+                      accessibilityState={{ checked: ticked }}
+                      accessibilityLabel={`Mark ${item.name} as ${ticked ? 'not purchased' : 'purchased'}`}
                       style={{ flex: 1 }}>
                       <Row gap={10}>
                         <View
@@ -293,14 +317,14 @@ export default function GroceriesScreen() {
                             height: 22,
                             borderRadius: 7,
                             borderWidth: 2,
-                            borderColor: item.purchased ? p.primary : p.line,
-                            backgroundColor: item.purchased ? p.primary : 'transparent',
+                            borderColor: ticked ? p.primary : p.line,
+                            backgroundColor: ticked ? p.primary : 'transparent',
                             alignItems: 'center',
                             justifyContent: 'center',
                           }}>
-                          {item.purchased ? <View style={{ width: 8, height: 8, borderRadius: 3, backgroundColor: p.primaryInk }} /> : null}
+                          {ticked ? <View style={{ width: 8, height: 8, borderRadius: 3, backgroundColor: p.primaryInk }} /> : null}
                         </View>
-                        <Text style={{ flex: 1, color: item.purchased ? p.muted : p.ink, textDecorationLine: item.purchased ? 'line-through' : 'none' }}>
+                        <Text style={{ flex: 1, color: ticked ? p.muted : p.ink, textDecorationLine: ticked ? 'line-through' : 'none' }}>
                           {item.quantity === 1 && item.unit === 'pcs' ? item.name : `${item.name} · ${item.quantity} ${item.unit}`}
                         </Text>
                       </Row>
@@ -315,7 +339,8 @@ export default function GroceriesScreen() {
                     )}
                   </Row>
                 </View>
-              ))}
+                );
+              })}
               <Text style={{ height: 8 }} />
               <Field
                 label="Add item"
