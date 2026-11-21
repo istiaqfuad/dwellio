@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "731621183831-hf13e1mgte7a84a85pih7vlgpv92b9su.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dwellio.app",
+            "certificate_hash": "e2f4b99317a29e389c87095f66c9c189f7620568"
+          }
+        },
+        {
           "client_id": "731621183831-lmn13qchtf22vrblrokt2iocq2duu6d5.apps.googleusercontent.com",
           "client_type": 3
         }
